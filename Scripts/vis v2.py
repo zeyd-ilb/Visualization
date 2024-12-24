@@ -91,10 +91,22 @@ app.layout = html.Div(
                     dcc.Dropdown(
                         id='dropdown-axis-bar',
                         options=[
-                            {'label': 'Injury Severity', 'value': 'Injury.severity'},
-                            {'label': 'Shark Species', 'value': 'Shark.common.name'},
-                            {'label': 'Location', 'value': 'Location'},
-                            {'label': 'Victim Activity', 'value': 'Victim.activity'}
+                            {
+                                "label": html.Span(['Injury Severity'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                "value": 'Injury.severity',
+                            },
+                            {
+                                "label": html.Span(['Shark Species'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                "value": 'Shark.common.name',
+                            },
+                            {
+                                "label": html.Span(['Location'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                "value": 'Location',
+                            },
+                            {
+                                "label": html.Span(['Victim Activity'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                "value": 'Victim.activity',
+                            }
                         ],
                         value='Injury.severity',  # Default value
                         clearable=False,
