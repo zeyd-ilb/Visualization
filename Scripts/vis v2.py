@@ -1,5 +1,5 @@
 #version with slider
-#tresholds for bar chart
+#with filtering options
 import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
@@ -72,7 +72,9 @@ app.layout = html.Div(
                 "minWidth": "250px",  # Minimum width
                 "maxWidth": "750px",  # Maximum width
                 "padding": "5px",
-                "borderRight": "1px solid #ccc",
+                "borderRight": "1px solid #444",  # Darker border color
+                "backgroundColor": "#000",  # Black background color
+                "color": "#fff",  # Light text color
                 "display": "flex",
                 "flexDirection": "column",
                 "overflowY": "auto",
@@ -80,13 +82,12 @@ app.layout = html.Div(
                 "overflow": "auto",
             },
             children=[
-                html.H2("Shark Incident Details", style={"marginBottom": "10px"}),
-                html.Div("Click on a point to see details.", id="incident-details", style={"marginBottom": "20px"}),
-                #dcc.Graph(id="sidebar-bar-chart", style={"flex": "1", "margin": "10px",'marginBottom':"10px"}),
+                html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
+                html.Div("Click on a point to see details.", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
                 
-                #Bar chart section
+                # Bar chart section
                 html.Div([
-                    html.Label("Select Attribute for Bar Chart:", style={'marginBottom': '10px'}),
+                    html.Label("Select Attribute for Bar Chart:", style={'marginBottom': '10px', 'color': '#fff'}),  # Light text color
                     dcc.Dropdown(
                         id='dropdown-axis-bar',
                         options=[
@@ -97,9 +98,13 @@ app.layout = html.Div(
                         ],
                         value='Injury.severity',  # Default value
                         clearable=False,
-                        style={'marginBottom': '10px'}
+                        style={
+                            'marginBottom': '10px',
+                            'color': '#fff',  # Light text color
+                            'backgroundColor': '#000',  # Black background color
+                        }
                     ),
-                    html.Label("Filter Options:", style={'marginBottom': '10px'}),
+                    html.Label("Filter Options:", style={'marginBottom': '10px', "color": "#fff"}),  # Light text color
                     dcc.RadioItems(
                         id='filter-options-bar',
                         options=[
@@ -108,12 +113,10 @@ app.layout = html.Div(
                             {'label': 'Show All', 'value': 'all'}
                         ],
                         value='top_10',  # Default option
-                        style={'marginBottom': '10px'}
+                        style={'marginBottom': '10px', "color": "#fff"}  # Light text color
                     ),
                     dcc.Graph(id='bar-chart', style={'margin': 'auto'})
-                ], style={'width': '100%', 'margin': 'auto', 'marginBottom': '5px'}),
-
-
+                ]),
             ],
         ),
 
@@ -181,6 +184,20 @@ def update_bar_chart(selected_attribute, filter_option):
     counts = data[selected_attribute].value_counts().reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
 
+    # Define a dictionary to map original column names to desired names
+    column_name_mapping = {
+        'Injury.severity': 'Injury Severity',
+        'Shark.common.name': 'Shark Species',
+        'Victim.activity': 'Victim Activity',
+        # Add more mappings as needed
+    }
+
+    # Rename the columns in the DataFrame
+    counts.rename(columns=column_name_mapping, inplace=True)
+
+    # Update the selected_attribute if it is one of the renamed columns
+    selected_attribute = column_name_mapping.get(selected_attribute, selected_attribute)
+
     # Apply filtering based on the selected filter option
     if filter_option == 'top_10':
         filtered_counts = counts.nlargest(10, 'Occurrences')  # Top 10
@@ -196,7 +213,7 @@ def update_bar_chart(selected_attribute, filter_option):
         y='Occurrences',
         title=f"{selected_attribute} by Frequency ({filter_option.replace('_', ' ').capitalize()})",
         labels={selected_attribute: selected_attribute, 'Occurrences': 'Number of Occurrences'},
-        template='plotly',
+        template='plotly_dark',
         color=selected_attribute  # Color bars based on the selected attribute
     )
 
