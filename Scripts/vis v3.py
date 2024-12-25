@@ -1,5 +1,4 @@
-#version with slider
-#tresholds for bar chart
+#interactive shark map - bar chart
 import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
