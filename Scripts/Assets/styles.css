@@ -1,0 +1,19 @@
+/* assets/styles.css */
+.Select-menu-outer {
+    background-color: #000 !important; /* Black background for dropdown menu */
+}
+
+.Select-option {
+    background-color: #000 !important; /* Black background for dropdown options */
+    color: #fff !important; /* White text color for dropdown options */
+}
+
+.Select-option.is-focused {
+    background-color: #333 !important; /* Darker background for focused option */
+    color: #fff !important; /* White text color for focused option */
+}
+
+.Select-option.is-selected {
+    background-color: #555 !important; /* Darker background for selected option */
+    color: #fff !important; /* White text color for selected option */
+}
