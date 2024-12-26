@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import requests
 import plotly.express as px
+import random
 
 
 # Load the shark attack data
@@ -26,6 +27,7 @@ fig = go.Figure()
     z=[],  # No color data
     showscale=False,  # Disable the color scale
 ))"""
+
 
 # Add shark incident points
 fig.add_trace(go.Scattermapbox(
@@ -214,45 +216,61 @@ def update_bar_chart(selected_attribute, filter_option):
     # Apply filtering based on the selected filter option
     if filter_option == 'top_10':
         filtered_counts = counts.nlargest(10, 'Occurrences')  # Top 10
+        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
     elif filter_option == 'bottom_10':
         filtered_counts = counts.nsmallest(10, 'Occurrences')  # Bottom 10
+        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
     else:  # Show all
         filtered_counts = counts
+        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
 
-    # Create a bar chart using Plotly Express
-    fig = px.bar(
-        filtered_counts,
-        x=selected_attribute,
-        y='Occurrences',
+    # Create a bar chart using Plotly Graph Objects
+    fig = go.Figure(data=[
+        go.Bar(
+            x=filtered_counts[selected_attribute],  # Set x-axis values
+            y=filtered_counts['Occurrences'],  # Set y-axis values
+            marker_color=colors,  # Set the colors of the bars (if needed)
+            customdata=colors,  # Pass the colors as custom data
+            hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',  # Customize hover text
+        )
+    ])
+
+    # Adjust layout for better readability and additional options
+    fig.update_layout(
         title=f"{selected_attribute} by Frequency ({filter_option.replace('_', ' ').capitalize()})",
-        labels={selected_attribute: selected_attribute, 'Occurrences': 'Number of Occurrences'},
-        template='plotly_dark',
-        color=selected_attribute  # Color bars based on the selected attribute
+        xaxis=dict(
+            title=selected_attribute,
+            categoryorder='total descending'  # Sort categories by total descending
+        ),
+        yaxis=dict(
+            title='Number of Occurrences'
+        ),
+        template='plotly_dark',  # Set the dark theme
     )
 
-    # Adjust layout for better readability
-    fig.update_layout(xaxis={'categoryorder': 'total descending'})
     return fig
-
 
 
 # Callback to update shark map based on bar click
 @app.callback(
     Output('shark-map', 'figure'),
-    Input('bar-chart', 'clickData')
+    [Input('bar-chart', 'clickData'),Input('dropdown-axis-bar', 'value')]
 )
-def update_shark_map(clickData):
+def update_shark_map(clickData, attribute_selected):
     if clickData is None:
         return fig
 
     clicked_category = clickData['points'][0]['x']
+    marker_color = clickData['points'][0]['customdata']  # Get the color of the clicked bar
     filtered_map_df = data[data['Injury.severity'] == clicked_category]
 
     new_fig = go.Figure(go.Scattermapbox(
         lat=filtered_map_df['Latitude'],
         lon=filtered_map_df['Longitude'],
         mode='markers',
-        marker=go.scattermapbox.Marker(size=8),
+        hoverinfo='text',
+        marker=go.scattermapbox.Marker(size=8, color=marker_color),
+        # marker=go.scattermapbox.Marker(size=8),
         text=data['Reference'],
     ))
     new_fig.update_layout(
