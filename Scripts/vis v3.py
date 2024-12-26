@@ -140,6 +140,7 @@ app.layout = html.Div(
                         clearable=False,
                         style={
                             'marginBottom': '10px',
+                            'marginTop': '10px',
                             'color': '#fff',  # Light text color
                             'backgroundColor': '#000',  # Black background color
                         }
@@ -155,6 +156,7 @@ app.layout = html.Div(
                         value='top_10',  # Default option
                         style={'marginBottom': '10px', "color": "#fff"}  # Light text color
                     ),
+                    html.Label("Click on a bar to see the points:", style={'marginBottom': '10px', "color": "#fff"}), 
                     dcc.Graph(id='bar-chart', style={'margin': 'auto'}),
                     html.Div(id='previous-dropdown-value', style={'display': 'none'}),
                 ]),
