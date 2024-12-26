@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import requests
 import plotly.express as px
+import json
 import random
 from dash.dependencies import Input, Output, State
 
@@ -155,7 +156,7 @@ app.layout = html.Div(
                         style={'marginBottom': '10px', "color": "#fff"}  # Light text color
                     ),
                     dcc.Graph(id='bar-chart', style={'margin': 'auto'}),
-                    html.Div(id='previous-dropdown-value', style={'display': 'none'})
+                    html.Div(id='previous-dropdown-value', style={'display': 'none'}),
                 ]),
             ],
         ),
@@ -225,12 +226,15 @@ def update_bar_chart(selected_attribute, filter_option):
     if filter_option == 'top_10':
         filtered_counts = counts.nlargest(10, 'Occurrences')  # Top 10
         colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        category_order = 'total descending'
     elif filter_option == 'bottom_10':
         filtered_counts = counts.nsmallest(10, 'Occurrences')  # Bottom 10
         colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        category_order = 'total ascending'
     else:  # Show all
         filtered_counts = counts
         colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        category_order = 'total descending'
 
     # Create a bar chart using Plotly Graph Objects
     fig = go.Figure(data=[
@@ -247,15 +251,14 @@ def update_bar_chart(selected_attribute, filter_option):
     fig.update_layout(
         title=f"{selected_attribute_renamed} by Frequency ({filter_option.replace('_', ' ').capitalize()})",
         xaxis=dict(
-            title=selected_attribute_renamed,
-            categoryorder='total descending'  # Sort categories by total descending
+            title= selected_attribute_renamed,
+            categoryorder= category_order  # Sort categories by total descending
         ),
         yaxis=dict(
             title='Number of Occurrences'
         ),
         template='plotly_dark',  # Set the dark theme
     )
-
     return fig
 
 
@@ -275,6 +278,7 @@ def update_shark_map(clickData, selected_attribute, previous_attribute):
         return initial_fig, selected_attribute
 
     clicked_category = clickData['points'][0]['x']
+
     marker_color = clickData['points'][0]['customdata']  # Get the color of the clicked bar
     filtered_map_df = data[data[selected_attribute] == clicked_category]
 
@@ -294,7 +298,6 @@ def update_shark_map(clickData, selected_attribute, previous_attribute):
         margin={"l": 0, "r": 0, "t": 0, "b": 0}
     )
     return new_fig, selected_attribute
-
 
 if __name__ == "__main__":
     app.run_server(debug=True)
