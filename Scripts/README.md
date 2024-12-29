@@ -1,7 +1,7 @@
 Always use the latest version! 
 
-
 Download the "Assets" folder and put it in the same directory.
+
 Check the file descriptions to see the updates
 
 ![image](https://github.com/user-attachments/assets/9aaa228b-ffd1-4241-bbd2-7a82d16a6383)
