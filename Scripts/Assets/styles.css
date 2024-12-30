@@ -25,8 +25,3 @@ html, body, #app {
     width: 100%;
     overflow: hidden;
 }
-
-
-#app {
-    margin-bottom: 200px; /* Add bottom margin */
-}
