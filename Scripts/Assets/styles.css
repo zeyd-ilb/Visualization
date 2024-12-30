@@ -17,3 +17,16 @@
     background-color: #555 !important; /* Darker background for selected option */
     color: #fff !important; /* White text color for selected option */
 }
+
+html, body, #app {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+
+#app {
+    margin-bottom: 200px; /* Add bottom margin */
+}
