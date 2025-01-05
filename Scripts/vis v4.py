@@ -9,10 +9,14 @@ import json
 import random
 from dash.dependencies import Input, Output, State
 import dash_mantine_components as dmc
+from sklearn.cluster import DBSCAN
+import numpy as np
+
+
 
 
 # Load the shark attack data
-data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -56,14 +60,27 @@ fig = go.Figure()
     showscale=False,  # Disable the color scale
 ))"""
 
+data["Latitude"] = [float(x) for x in data["Latitude"]]
+data["Longitude"] = [float(x) for x in data["Longitude"]]
+
+coords = data[["Latitude", "Longitude"]]
+kms_per_radian = 6371.0088
+epsilon = 85/ kms_per_radian
+db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(np.radians(coords))
+cluster_labels = db.labels_
+data["Cluster"] = cluster_labels
+outlisers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
+i = outlisers[(outlisers.Cluster < 4)].index
+new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
+new_df.drop(i, inplace=True)
 
 # Add shark incident points
 fig.add_trace(go.Scattermapbox(
-    lat=data["Latitude"],
-    lon=data["Longitude"],
+    lat=new_df["Latitude"],
+    lon=new_df["Longitude"],
     mode="markers",
     marker=dict(size=8, color="red"),
-    text=data["Reference"],  # Hover text
+    text=new_df["Location"],  # Hover text
     hoverinfo="text",  # Text displayed on hover
     customdata=data.index,  # Pass row indices as custom data
 ))
@@ -303,7 +320,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     
     return fig
     
-
+'''
 # Callback to update shark map based on bar click
 @app.callback(
     [Output('shark-map', 'figure'),
@@ -340,6 +357,7 @@ def update_shark_map(clickData, selected_attribute, previous_attribute):
         margin={"l": 0, "r": 0, "t": 0, "b": 0}
     )
     return new_fig, selected_attribute
-
+'''
+    
 if __name__ == "__main__":
     app.run_server(debug=True)
