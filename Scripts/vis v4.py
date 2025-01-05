@@ -11,8 +11,9 @@ from dash.dependencies import Input, Output, State
 import dash_mantine_components as dmc
 from sklearn.cluster import DBSCAN
 import numpy as np
-
-
+from dash import Input, Output, State
+import seaborn as sns
+import matplotlib.colors as mcolors
 
 
 # Load the shark attack data
@@ -32,7 +33,7 @@ initial_fig.add_trace(go.Scattermapbox(
     lon=data["Longitude"],
     mode="markers",
     marker=dict(size=8, color="red"),
-    text=data["Reference"],  # Hover text
+    text=data["Shark.common.name"],  # Hover text
     hoverinfo="text",  # Text displayed on hover
     customdata=data.index,  # Pass row indices as custom data
 ))
@@ -42,7 +43,7 @@ initial_fig.update_layout(
     mapbox=dict(
         style="carto-darkmatter",
         zoom=3.5,
-        center={"lat": -25.0, "lon": 134.0},  # Center the map on Australia
+        center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
     ),
     margin={"l": 0, "r": 0, "t": 0, "b": 0}
 )
@@ -60,6 +61,8 @@ fig = go.Figure()
     showscale=False,  # Disable the color scale
 ))"""
 
+# PREPARE DATA
+# CLUSTER LOCATIONS 
 data["Latitude"] = [float(x) for x in data["Latitude"]]
 data["Longitude"] = [float(x) for x in data["Longitude"]]
 
@@ -74,13 +77,19 @@ i = outlisers[(outlisers.Cluster < 4)].index
 new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
 new_df.drop(i, inplace=True)
 
+# COLOR BY TYPE
+shark_types = data["Shark.common.name"].unique()
+color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
+shark_color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+data["Shark.color"] = data["Shark.common.name"].map(shark_color_map)
+
 # Add shark incident points
 fig.add_trace(go.Scattermapbox(
     lat=new_df["Latitude"],
     lon=new_df["Longitude"],
     mode="markers",
-    marker=dict(size=8, color="red"),
-    text=new_df["Location"],  # Hover text
+    marker=dict(size=15, color='blue'),
+    text=data["Location"],  # Hover text
     hoverinfo="text",  # Text displayed on hover
     customdata=data.index,  # Pass row indices as custom data
 ))
@@ -90,7 +99,7 @@ fig.update_layout(
     mapbox=dict(
         # style="white-bg",  # Disable the base map (shows no other lands)
         style="carto-darkmatter",  # Disable the base map (shows no other lands)
-        center={"lat": -25.0, "lon": 134.0},  # Center the map on Australia
+        center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
         zoom=3.5,
         # layers=[
         #     dict(
@@ -106,7 +115,73 @@ fig.update_layout(
 )
 
 # Dash app
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
+
+app.layout = html.Div([
+        dcc.Graph(
+            id="shark-map",
+            figure=fig
+        ),
+        html.Button(
+            "Reset Zoom", 
+            id="reset_button", 
+            n_clicks=0,
+            style={"left": "2%", "bottom": "2%"}
+        )
+    ]
+)
+
+# Callback to update map zoom and center when a marker is clicked
+@app.callback(
+    Output("shark-map", "figure"),
+    [Input("shark-map", "clickData"), Input("reset_button", "n_clicks")],
+)
+def zoom_on_click(clickData, n_clicks):
+    
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        return fig
+
+    # Check what triggered the callback
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if triggered_id == "shark-map" and clickData:
+    # Extract latitude and longitude of the clicked marker
+        lat = clickData["points"][0]["lat"]
+        lon = clickData["points"][0]["lon"]
+
+        fig.add_trace(go.Scattermapbox(
+            lat=data["Latitude"],
+            lon=data["Longitude"],
+            mode="markers",
+            marker=dict(size=15, color=data["Shark.color"]),
+            text=data["Shark.common.name"],  # Hover text
+            hoverinfo="text",  # Text displayed on hover
+            customdata=data.index,  # Pass row indices as custom data
+        ))
+        
+        # Update map settings to zoom into the clicked location
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": lat, "lon": lon},  # Center on clicked marker
+                zoom=8  # Zoom level 
+            ),
+            showlegend = False
+        )
+    elif triggered_id == "reset_button" and n_clicks:
+        fig.data = fig.data[:1]
+        # Reset zoom to default view
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
+                zoom=3.5
+            )
+        )
+
+    return fig
+
+
 
 # App layout with a resizable sidebar
 app.layout = dmc.MantineProvider(
@@ -138,11 +213,11 @@ app.layout = dmc.MantineProvider(
                                 "overflow": "auto",  # Add scrollbars when needed
                                 # "resize": "horizontal", # Not supported with MantineProvider
                             },
+                        
                             children=[
                                 # Left COLUMN
                                 html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
-                                html.Div("Click on a point to see details. (disabled for now)", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
-                                
+                                html.Div("Click on a point to see details. (disabled for now)", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color,
                                 #BAR CHART
                                 html.Div(
                                     children=[
@@ -198,19 +273,39 @@ app.layout = dmc.MantineProvider(
                                 html.Div(id='previous-dropdown-value', style={'display': 'none'}),
                                 dmc.Switch(id="switch-example", label="Use Log Scale.", checked=False),
                                 html.H2("", style={"marginBottom": "50px", "color": "#fff"}),  # To give unvisible bottom margin
-
                             ],
                         ),
                     ],
                 ),
                 dmc.Col(
                     span=6,  # Adjust the span as needed
-                    style={"padding": 0, "margin": 0, "height": "100%", "width": "100%", "flex": "1", "overflow": "hidden"},  # Map resizes with the sidebar
+                    style={"padding": 0, "margin": 0, "height": "100%", "width": "100%", "fixed": "1", "overflow": "hidden"},  # Map resizes with the sidebar
                     children=[
+                        html.Button(
+                            "Reset Zoom", 
+                            id="reset_button", 
+                            n_clicks=0,
+                            style={
+                                "position": "absolute",  # Use absolute positioning for the button
+                                "left": "2%", 
+                                "bottom": "20%", 
+                                "z-index": 10,  # Ensure the button is on top
+                                "backgroundColor": "red",  # Optional: Add background color for visibility
+                                "border": "none",
+                                "padding": "10px",
+                                "color": "white"
+                            }
+                        ),
                         dcc.Graph(
                             id="shark-map",
                             figure=fig,
-                            style={"flex": "1", "overflow": "hidden","padding": 0, "margin": 0, "height":"100vh", "width":"100vh"},  # Map resizes with the sidebar
+                            style={
+                                "position": "relative",  # This allows the graph to fill its container
+                                "height": "100vh",  # Ensure the graph takes full available height
+                                "width": "100w",  # Ensure the graph takes full available width
+                                "padding": 0,
+                                "margin": 0
+                            },
                         ),
                     ],
                 ),
@@ -246,8 +341,6 @@ def display_incident_details_and_chart(clickData):
 
     return details
 }"""
-
-
 
 # Callback to update the bar chart 
 @app.callback(
@@ -317,7 +410,6 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
         template='plotly_dark',  # Set the dark theme
     )
 
-    
     return fig
     
 '''
