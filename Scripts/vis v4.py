@@ -386,6 +386,7 @@ def update_shark_map(clickData, compare, selected_attribute, previous_attribute)
             mode='markers',
             marker=go.scattermapbox.Marker(size=8, color=color),
             text=filtered_map_df['Reference'],
+            showlegend=False
         ))
 
     new_fig.update_layout(
