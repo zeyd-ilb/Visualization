@@ -45,7 +45,8 @@ initial_fig.update_layout(
         zoom=3.5,
         center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
     ),
-    margin={"l": 0, "r": 0, "t": 0, "b": 0}
+    margin={"l": 0, "r": 0, "t": 0, "b": 0},
+    dragmode=False  # Disable dragging
 )
 
 # Create the base map
@@ -112,6 +113,7 @@ fig.update_layout(
         # ],
     ),
     margin={"l": 0, "r": 0, "t": 0, "b": 0},  # Remove margins
+    dragmode=False
 )
 
 # Dash app
@@ -130,57 +132,6 @@ app.layout = html.Div([
         )
     ]
 )
-
-# Callback to update map zoom and center when a marker is clicked
-@app.callback(
-    Output("shark-map", "figure"),
-    [Input("shark-map", "clickData"), Input("reset_button", "n_clicks")],
-)
-def zoom_on_click(clickData, n_clicks):
-    
-    ctx = dash.callback_context
-
-    if not ctx.triggered:
-        return fig
-
-    # Check what triggered the callback
-    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-    if triggered_id == "shark-map" and clickData:
-    # Extract latitude and longitude of the clicked marker
-        lat = clickData["points"][0]["lat"]
-        lon = clickData["points"][0]["lon"]
-
-        fig.add_trace(go.Scattermapbox(
-            lat=data["Latitude"],
-            lon=data["Longitude"],
-            mode="markers",
-            marker=dict(size=15, color=data["Shark.color"]),
-            text=data["Shark.common.name"],  # Hover text
-            hoverinfo="text",  # Text displayed on hover
-            customdata=data.index,  # Pass row indices as custom data
-        ))
-        
-        # Update map settings to zoom into the clicked location
-        fig.update_layout(
-            mapbox=dict(
-                center={"lat": lat, "lon": lon},  # Center on clicked marker
-                zoom=8  # Zoom level 
-            ),
-            showlegend = False
-        )
-    elif triggered_id == "reset_button" and n_clicks:
-        fig.data = fig.data[:1]
-        # Reset zoom to default view
-        fig.update_layout(
-            mapbox=dict(
-                center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
-                zoom=3.5
-            )
-        )
-
-    return fig
-
 
 
 # App layout with a resizable sidebar
@@ -411,7 +362,166 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     )
 
     return fig
+
+# Callback to handle all interactions with the map
+@app.callback(
+    [Output("shark-map", "figure"),
+     Output("previous-dropdown-value", "children")],
+    [Input("shark-map", "clickData"), 
+     Input("reset_button", "n_clicks"), 
+     Input("bar-chart", "clickData"),
+     Input("dropdown-axis-bar", "value")],
+    [State("previous-dropdown-value", "children")]
+)
+def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, selected_attribute, previous_attribute):
+    ctx = dash.callback_context
+
+    # If no triggered inputs, return the initial state
+    if not ctx.triggered:
+        return fig, selected_attribute
+
+    # Determine which input triggered the callback
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    # Handle map marker click for zooming into a location
+    if triggered_id == "shark-map" and map_click_data:
+        # Extract latitude and longitude of the clicked marker
+        lat = map_click_data["points"][0]["lat"]
+        lon = map_click_data["points"][0]["lon"]
+
+        # Add trace for all points (if needed)
+        fig.add_trace(go.Scattermapbox(
+            lat=data["Latitude"],
+            lon=data["Longitude"],
+            mode="markers",
+            marker=dict(size=15, color=data["Shark.color"]),
+            text=data["Shark.common.name"],  # Hover text
+            customdata=data.index,  # Pass row indices as custom data
+        ))
+        
+        # Update map layout to zoom into the clicked point
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": lat, "lon": lon},  # Center on clicked marker
+                zoom=8  # Zoom level
+            ),
+            showlegend=False,
+            dragmode=False
+        )
+        return fig, selected_attribute
+
+    # Handle bar-chart click for filtering map points
+    elif triggered_id == "bar-chart" and bar_click_data:
+        # Check current zoom level to determine if bar chart interaction is allowed
+        current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
+        if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
+            return fig, selected_attribute
+
+        if previous_attribute is None:
+            previous_attribute = selected_attribute
+
+        # Reset if the attribute changes or no data
+        if bar_click_data is None or selected_attribute != previous_attribute:
+            return initial_fig, selected_attribute
+
+        # Filter map points based on bar chart selection
+        clicked_category = bar_click_data['points'][0]['x']
+        marker_color = bar_click_data['points'][0]['customdata']  # Get color from bar
+        filtered_map_df = data[data[selected_attribute] == clicked_category]
+
+        # Create new figure with filtered points
+        new_fig = go.Figure(go.Scattermapbox(
+            lat=filtered_map_df["Latitude"],
+            lon=filtered_map_df["Longitude"],
+            mode="markers",
+            marker=go.scattermapbox.Marker(size=15, color=marker_color),
+            text=filtered_map_df["Reference"],  # Hover text
+        ))
+        new_fig.update_layout(
+            mapbox=dict(
+                style="carto-darkmatter",
+                zoom=current_zoom,  # Keep the current zoom level
+                center={"lat": fig.layout.mapbox.center.lat, "lon": fig.layout.mapbox.center.lon},  # Keep current center
+            ),
+            margin={"l": 0, "r": 0, "t": 0, "b": 0},
+            dragmode=False
+        )
+        return new_fig, selected_attribute
+
+    # Handle reset button click
+    elif triggered_id == "reset_button" and reset_clicks:
+        # Remove all traces except the initial one
+        fig.data = fig.data[:1]
+
+        # Reset map to default view
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": -23.69748, "lon": 133.88362},  # Default center
+                zoom=3.5
+            ),
+            dragmode=False
+        )
+        return fig, selected_attribute
+
+    # Default return
+    return fig, selected_attribute
+
+
+'''
+# Callback to update map zoom and center when a marker is clicked
+@app.callback(
+    Output("shark-map", "figure"),
+    [Input("shark-map", "clickData"), Input("reset_button", "n_clicks")],
+)
+def zoom_on_click(clickData, n_clicks):
     
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        return fig
+
+    # Check what triggered the callback
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if triggered_id == "shark-map" and clickData:
+    # Extract latitude and longitude of the clicked marker
+        lat = clickData["points"][0]["lat"]
+        lon = clickData["points"][0]["lon"]
+
+        fig.add_trace(go.Scattermapbox(
+            lat=data["Latitude"],
+            lon=data["Longitude"],
+            mode="markers",
+            marker=dict(size=15, color=data["Shark.color"]),
+            text=data["Shark.common.name"],  # Hover text
+            hoverinfo="text",  # Text displayed on hover
+            customdata=data.index,  # Pass row indices as custom data
+        ))
+        
+        # Update map settings to zoom into the clicked location
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": lat, "lon": lon},  # Center on clicked marker
+                zoom=8  # Zoom level 
+            ),
+            showlegend = False,
+            dragmode=False
+        )
+
+    elif triggered_id == "reset_button" and n_clicks:
+        fig.data = fig.data[:1]
+        # Reset zoom to default view
+        fig.update_layout(
+            mapbox=dict(
+                center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
+                zoom=3.5
+            ),
+            dragmode=False
+        )
+
+    return fig
+
+'''
 '''
 # Callback to update shark map based on bar click
 @app.callback(
@@ -450,6 +560,6 @@ def update_shark_map(clickData, selected_attribute, previous_attribute):
     )
     return new_fig, selected_attribute
 '''
-    
+
 if __name__ == "__main__":
     app.run_server(debug=True)
