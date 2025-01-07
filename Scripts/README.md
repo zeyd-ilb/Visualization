@@ -1,4 +1,4 @@
-Always use the latest version! 
+Upload the common (combined) files to here! 
 
 Download the "Assets" folder and put it in the same directory.
 
