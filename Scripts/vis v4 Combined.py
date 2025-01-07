@@ -23,6 +23,7 @@ data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
 # geojson_data = requests.get(geojson_url).json()
 
+#Not being used now
 #Initial figure with all data points
 def create_initial_fig_all():
     # Initial figure setup
@@ -71,21 +72,40 @@ def location_cluster():
     db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(np.radians(coords))
     cluster_labels = db.labels_
     data["Cluster"] = cluster_labels
-    outlisers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
-    i = outlisers[(outlisers.Cluster < 4)].index
     
+    outliers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
+    i = outliers[(outliers.Cluster < 4)].index
+
+        
     new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
     new_df.drop(i, inplace=True)
-
-    # COLOR BY TYPE
-    shark_types = data["Shark.common.name"].unique()
-    color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-    shark_color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
-    data["Shark.color"] = data["Shark.common.name"].map(shark_color_map)
     
-    return new_df
+    cluster_sizes = []
 
-new_df = location_cluster()
+    for count in outliers.Cluster:
+        if count >= 4:
+            cluster_sizes.append(count)
+
+
+    return new_df, cluster_sizes
+
+new_df, cluster_sizes = location_cluster()
+
+def color_coding(attribute):
+    # COLOR BY TYPE
+    if attribute == "Shark.common.name":
+        shark_types = data["Shark.common.name"].unique()
+        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
+        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        data["Shark.color"] = data["Shark.common.name"].map(color_map)
+
+    if attribute == "Injury.severity":
+        injury_types = data["Injury.severity"].unique()
+        color_palette = sns.color_palette("Set1", len(injury_types))  # Use seaborn color palette\
+        color_map = {injury_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(injury_types))}
+        data["Injury.color"] = data["Injury.severity"].map(color_map)
+    
+    return color_map
 
 def initial_fig_clustered():
     # Create the base map
@@ -95,10 +115,12 @@ def initial_fig_clustered():
     fig.add_trace(go.Scattermapbox(
         lat=new_df["Latitude"],
         lon=new_df["Longitude"],
-        mode="markers",
+        mode="markers+text",
         marker=dict(size=15, color='blue'),
-        text=data["Location"],  # Hover text
-        hoverinfo="text",  # Text displayed on hover
+        text=cluster_sizes,  # Hover text
+        textposition="middle center",  # Position of the text relative to the markers
+        textfont=dict(color='white'),
+        hoverinfo="none",  # Text displayed on hover
         customdata=data.index,  # Pass row indices as custom data
     ))
 
@@ -265,12 +287,18 @@ app.layout = dmc.MantineProvider(
     ],
 )
 
+# Global variable to store clicked categories and their colors
+clicked_categories = []
+bar_colors = []
+
 # Callback to update the bar chart 
 @app.callback(
     Output('bar-chart', 'figure'),
     [Input('dropdown-axis-bar', 'value'), Input('filter-options-bar', 'value'),Input("switch_log_scale", "checked")]
 )
 def update_bar_chart(selected_attribute, filter_option, log_scale):
+    global bar_colors
+
     # Count occurrences of each unique value in the selected attribute
     counts = data[selected_attribute].value_counts().reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
@@ -292,24 +320,26 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     # Apply filtering based on the selected filter option
     if filter_option == 'top_10':
         filtered_counts = counts.nlargest(10, 'Occurrences')  # Top 10
-        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total descending'
     elif filter_option == 'bottom_10':
         filtered_counts = counts.nsmallest(10, 'Occurrences')  # Bottom 10
-        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total ascending'
     else:  # Show all
         filtered_counts = counts
-        colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
+        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total descending'
+
+    bar_colors = filtered_counts[selected_attribute_renamed].map(color_coding(selected_attribute))
 
     # Create a bar chart using Plotly Graph Objects
     fig = go.Figure(data=[
         go.Bar(
             x=filtered_counts[selected_attribute_renamed],  # Set x-axis values
             y=filtered_counts['Occurrences'],  # Set y-axis values
-            marker_color=colors,  # Set the colors of the bars (if needed)
-            customdata=colors,  # Pass the colors as custom data
+            marker_color= bar_colors,  # Set the colors of the bars (if needed)
+            customdata= bar_colors,  # Pass the colors as custom data
             hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',  # Customize hover text
         )
     ])
@@ -335,8 +365,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 
     return fig
 
-# Global variable to store clicked categories and their colors
-clicked_categories = []
+
 
 # Callback to handle all interactions with the map
 @app.callback(
@@ -361,6 +390,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     # Determine which input triggered the callback
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
+     # Define a dictionary to map original column names to desired names
+    attribute_color_mapping = {
+        'Injury.severity': 'Injury.color',
+        'Shark.common.name': 'Shark.color',
+        'Victim.activity': 'Victim.color',
+        # Add more mappings as needed
+    }
+
+    #map the attribute to the color column
+    color_column = attribute_color_mapping.get(selected_attribute, selected_attribute)
+
     # Handle map marker click for zooming into a location
     if triggered_id == "shark-map" and map_click_data:
         # Extract latitude and longitude of the clicked marker
@@ -372,8 +412,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             lat=data["Latitude"],
             lon=data["Longitude"],
             mode="markers",
-            marker=dict(size=15, color=data["Shark.color"]),
-            text=data["Shark.common.name"],  # Hover text
+            marker=dict(size=15, color= data[color_column]),
+            text=data["Injury.severity"],  # Hover text
             customdata=data.index,  # Pass row indices as custom data
         ))
         
