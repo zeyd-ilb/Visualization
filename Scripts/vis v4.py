@@ -366,7 +366,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 # Callback to handle all interactions with the map
 @app.callback(
     [Output("shark-map", "figure"),
-     Output("previous-dropdown-value", "children")],
+     Output("previous-dropdown-value", "children"), Output("bar-chart", "clickData")],
     [Input("shark-map", "clickData"), 
      Input("reset_button", "n_clicks"), 
      Input("bar-chart", "clickData"),
@@ -378,7 +378,7 @@ def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, select
 
     # If no triggered inputs, return the initial state
     if not ctx.triggered:
-        return fig, selected_attribute
+        return fig, selected_attribute, None
 
     # Determine which input triggered the callback
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -394,7 +394,7 @@ def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, select
             lat=data["Latitude"],
             lon=data["Longitude"],
             mode="markers",
-            marker=dict(size=15, color=data["Shark.color"]),
+            marker=dict(size=15, color="red"),
             text=data["Shark.common.name"],  # Hover text
             customdata=data.index,  # Pass row indices as custom data
         ))
@@ -408,21 +408,21 @@ def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, select
             showlegend=False,
             dragmode=False
         )
-        return fig, selected_attribute
+        return fig, selected_attribute, None
 
     # Handle bar-chart click for filtering map points
     elif triggered_id == "bar-chart" and bar_click_data:
         # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute
+            return fig, selected_attribute, None
 
         if previous_attribute is None:
             previous_attribute = selected_attribute
 
         # Reset if the attribute changes or no data
         if bar_click_data is None or selected_attribute != previous_attribute:
-            return initial_fig, selected_attribute
+            return initial_fig, selected_attribute, None
 
         # Filter map points based on bar chart selection
         clicked_category = bar_click_data['points'][0]['x']
@@ -446,7 +446,7 @@ def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, select
             margin={"l": 0, "r": 0, "t": 0, "b": 0},
             dragmode=False
         )
-        return new_fig, selected_attribute
+        return new_fig, selected_attribute, None
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
@@ -461,10 +461,10 @@ def handle_map_interactions(map_click_data, reset_clicks, bar_click_data, select
             ),
             dragmode=False
         )
-        return fig, selected_attribute
+        return fig, selected_attribute, None
 
     # Default return
-    return fig, selected_attribute
+    return fig, selected_attribute, None
 
 
 '''

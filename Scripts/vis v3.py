@@ -7,11 +7,13 @@ import requests
 import plotly.express as px
 import json
 import random
+import numpy as np
+from sklearn.cluster import DBSCAN
 from dash.dependencies import Input, Output, State
 
 
 # Load the shark attack data
-data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 
 # Load a GeoJSON file with only Australia boundaries
 geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -20,10 +22,21 @@ geojson_data = requests.get(geojson_url).json()
 # Initial figure setup
 initial_fig = go.Figure()
 
+data["Latitude"] = [float(x) for x in data["Latitude"]]
+data["Longitude"] = [float(x) for x in data["Longitude"]]
+
+coords = data[["Latitude", "Longitude"]]
+kms_per_radian = 6371.0088
+epsilon = 130 / kms_per_radian
+db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(np.radians(coords))
+cluster_labels = db.labels_
+data["Cluster"] = cluster_labels
+cluster_medians = data.groupby("Cluster")[["Latitude", "Longitude"]].median()
+
 # Add shark incident points to the initial figure
 initial_fig.add_trace(go.Scattermapbox(
-    lat=data["Latitude"],
-    lon=data["Longitude"],
+    lat=cluster_medians["Latitude"],
+    lon=cluster_medians["Longitude"],
     mode="markers",
     marker=dict(size=8, color="red"),
     text=data["Reference"],  # Hover text
@@ -54,11 +67,10 @@ fig = go.Figure()
     showscale=False,  # Disable the color scale
 ))"""
 
-
 # Add shark incident points
 fig.add_trace(go.Scattermapbox(
-    lat=data["Latitude"],
-    lon=data["Longitude"],
+    lat=cluster_medians["Latitude"],
+    lon=cluster_medians["Longitude"],
     mode="markers",
     marker=dict(size=8, color="red"),
     text=data["Reference"],  # Hover text
