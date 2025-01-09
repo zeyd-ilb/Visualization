@@ -120,8 +120,10 @@ def initial_fig_clustered():
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
         textfont=dict(color='white'),
-        hoverinfo="none",  # Text displayed on hover
+        hovertext="Cick to see the details",  # Text displayed on hover
+        hoverinfo="text",  # Text displayed on hover
         customdata=data.index,  # Pass row indices as custom data
+
     ))
 
     # Final map settings
@@ -132,7 +134,8 @@ def initial_fig_clustered():
             zoom=3.5,
         ),
         margin={"l": 0, "r": 0, "t": 0, "b": 0},  # Remove margins
-        dragmode=False
+        dragmode=False,
+        showlegend=False,
     )
     return fig
 
@@ -371,7 +374,8 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 @app.callback(
     [Output("shark-map", "figure"),
      Output("previous-dropdown-value", "children"),
-     Output('bar-chart', 'clickData')],
+     Output('bar-chart', 'clickData'),
+     Output('shark-map', 'clickData')],
     [Input("bar-chart", "clickData"),
      Input("dropdown-axis-bar", "value"),
      Input("shark-map", "clickData"), 
@@ -381,11 +385,12 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 )
 def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, reset_clicks, previous_attribute):
     global clicked_categories
+    global fig
     ctx = dash.callback_context
 
     # If no triggered inputs, return the initial state
     if not ctx.triggered:
-        return fig, selected_attribute, None
+        return fig, selected_attribute, None, None
 
     # Determine which input triggered the callback
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -407,6 +412,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
+        # fig = go.Figure()
+        fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
             lat=data["Latitude"],
@@ -426,14 +433,14 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             showlegend=False,
             dragmode=False
         )
-        return fig, selected_attribute, None
+        return fig, selected_attribute, None, None
 
     # Handle bar-chart click for filtering map points
     elif triggered_id == "bar-chart" and bar_click_data:
         # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute, None
+            return fig, selected_attribute, None, None
 
         if previous_attribute is None:
             previous_attribute = selected_attribute
@@ -441,7 +448,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Reset if the attribute changes or no data
         if bar_click_data is None or selected_attribute != previous_attribute:
             clicked_categories = []
-            return fig, selected_attribute, None
+            return fig, selected_attribute, None, None
 
         # Filter map points based on bar chart selection
         clicked_category = bar_click_data['points'][0]['x']
@@ -461,7 +468,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         # If clicked_categories is empty, return the initial figure
         if not clicked_categories:
-            return fig, selected_attribute, None
+            return fig, selected_attribute, None, None
     
         new_fig = go.Figure()
 
@@ -485,12 +492,13 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             margin={"l": 0, "r": 0, "t": 0, "b": 0},
             dragmode=False
         )
-        return new_fig, selected_attribute, None
+        return new_fig, selected_attribute, None, None
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
+        
         # Remove all traces except the initial one
-        fig.data = fig.data[:1]
+        fig= initial_fig_clustered()
 
         # Reset map to default view
         fig.update_layout(
@@ -500,10 +508,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             dragmode=False
         )
-        return fig, selected_attribute , None
+        return fig, selected_attribute , None, None
 
     # Default return
-    return fig, selected_attribute, None
+    return fig, selected_attribute, None, None
 
 if __name__ == "__main__":
     app.run_server(debug=True)
