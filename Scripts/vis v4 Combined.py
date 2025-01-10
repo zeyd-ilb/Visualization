@@ -91,20 +91,36 @@ def location_cluster():
 
 new_df, cluster_sizes = location_cluster()
 
+def attribute_preprocessing():
+    # PREPROCESSING
+    # Fill missing values with a placeholder for better readability and smooth mapping
+    data["Injury.severity"] = data["Injury.severity"].fillna("Missing Information")
+    data["Shark.common.name"] = data["Shark.common.name"].fillna("Missing Information")
+    data["Location"] = data["Location"].fillna("Missing Information")
+    data["Victim.activity"] = data["Victim.activity"].fillna("Missing Information")
+
+attribute_preprocessing()
+
 def color_coding(attribute):
     # COLOR BY TYPE
-    if attribute == "Shark.common.name":
-        shark_types = data["Shark.common.name"].unique()
-        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
-        data["Shark.color"] = data["Shark.common.name"].map(color_map)
-
     if attribute == "Injury.severity":
-        injury_types = data["Injury.severity"].unique()
+        injury_types = data[attribute] .unique()
         color_palette = sns.color_palette("Set1", len(injury_types))  # Use seaborn color palette\
         color_map = {injury_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(injury_types))}
-        data["Injury.color"] = data["Injury.severity"].map(color_map)
-    
+        data["Injury.color"] = data[attribute] .map(color_map)
+
+    if attribute == "Shark.common.name":
+        shark_types = data[attribute].unique()
+        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
+        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        data["Shark.color"] = data[attribute].map(color_map)
+
+    if attribute == "Victim.activity":
+        shark_types = data[attribute].unique()
+        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
+        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        data["Shark.color"] = data[attribute].map(color_map)
+
     return color_map
 
 def initial_fig_clustered():
@@ -177,7 +193,6 @@ app.layout = dmc.MantineProvider(
                                 # Left COLUMN
                                 html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
                                 html.Div("Click on a point to see details. (disabled for now)", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
-                                
                                 #BAR CHART
                                 html.Div(
                                     children=[
@@ -192,10 +207,6 @@ app.layout = dmc.MantineProvider(
                                                 {
                                                     "label": html.Span(['Shark Species'], style={'color': '#fff', 'backgroundColor': '#000'}),
                                                     "value": 'Shark.common.name',
-                                                },
-                                                {
-                                                    "label": html.Span(['Location'], style={'color': '#fff', 'backgroundColor': '#000'}),
-                                                    "value": 'Location',
                                                 },
                                                 {
                                                     "label": html.Span(['Victim Activity'], style={'color': '#fff', 'backgroundColor': '#000'}),
@@ -303,7 +314,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     global bar_colors
 
     # Count occurrences of each unique value in the selected attribute
-    counts = data[selected_attribute].value_counts().reset_index()
+    counts = data[selected_attribute].value_counts(dropna=False).reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
 
     # Define a dictionary to map original column names to desired names
@@ -369,7 +380,6 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     return fig
 
 
-
 # Callback to handle all interactions with the map
 @app.callback(
     [Output("shark-map", "figure"),
@@ -386,6 +396,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, reset_clicks, previous_attribute):
     global clicked_categories
     global fig
+
     ctx = dash.callback_context
 
     # If no triggered inputs, return the initial state
@@ -408,6 +419,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Handle map marker click for zooming into a location
     if triggered_id == "shark-map" and map_click_data:
+
         # Extract latitude and longitude of the clicked marker
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
@@ -512,6 +524,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Default return
     return fig, selected_attribute, None, None
+
+
 
 if __name__ == "__main__":
     app.run_server(debug=True)
