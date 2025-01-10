@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -48,7 +48,6 @@ def create_initial_fig_all():
             center={"lat": -23.69748, "lon": 133.88362},  # Center the map on Australia
         ),
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
-        dragmode=False  # Disable dragging
     )
     return initial_fig
 
@@ -59,11 +58,11 @@ def location_cluster():
     # CLUSTER LOCATIONS
 
     # Clean the Longitude column by removing trailing periods
-    data["Longitude"] = data["Longitude"].str.rstrip('.')
+    #data["Longitude"] = data["Longitude"].str.rstrip('.')
     data["Longitude"] = [float(x) for x in data["Longitude"]]
 
     # Clean the Latitude column by removing trailing periods
-    data["Latitude"] = data["Latitude"].str.rstrip('.')
+    #data["Latitude"] = data["Latitude"].str.rstrip('.')
     data["Latitude"] = [float(x) for x in data["Latitude"]]
 
     coords = data[["Latitude", "Longitude"]]
@@ -91,36 +90,20 @@ def location_cluster():
 
 new_df, cluster_sizes = location_cluster()
 
-def attribute_preprocessing():
-    # PREPROCESSING
-    # Fill missing values with a placeholder for better readability and smooth mapping
-    data["Injury.severity"] = data["Injury.severity"].fillna("Missing Information")
-    data["Shark.common.name"] = data["Shark.common.name"].fillna("Missing Information")
-    data["Location"] = data["Location"].fillna("Missing Information")
-    data["Victim.activity"] = data["Victim.activity"].fillna("Missing Information")
-
-attribute_preprocessing()
-
 def color_coding(attribute):
     # COLOR BY TYPE
+    if attribute == "Shark.common.name":
+        shark_types = data["Shark.common.name"].unique()
+        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
+        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        data["Shark.color"] = data["Shark.common.name"].map(color_map)
+
     if attribute == "Injury.severity":
-        injury_types = data[attribute] .unique()
+        injury_types = data["Injury.severity"].unique()
         color_palette = sns.color_palette("Set1", len(injury_types))  # Use seaborn color palette\
         color_map = {injury_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(injury_types))}
-        data["Injury.color"] = data[attribute] .map(color_map)
-
-    if attribute == "Shark.common.name":
-        shark_types = data[attribute].unique()
-        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
-        data["Shark.color"] = data[attribute].map(color_map)
-
-    if attribute == "Victim.activity":
-        shark_types = data[attribute].unique()
-        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
-        data["Shark.color"] = data[attribute].map(color_map)
-
+        data["Injury.color"] = data["Injury.severity"].map(color_map)
+    
     return color_map
 
 def initial_fig_clustered():
@@ -136,10 +119,8 @@ def initial_fig_clustered():
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
         textfont=dict(color='white'),
-        hovertext="Cick to see the details",  # Text displayed on hover
-        hoverinfo="text",  # Text displayed on hover
+        hoverinfo="none",  # Text displayed on hover
         customdata=data.index,  # Pass row indices as custom data
-
     ))
 
     # Final map settings
@@ -150,8 +131,7 @@ def initial_fig_clustered():
             zoom=3.5,
         ),
         margin={"l": 0, "r": 0, "t": 0, "b": 0},  # Remove margins
-        dragmode=False,
-        showlegend=False,
+        dragmode=False
     )
     return fig
 
@@ -193,6 +173,7 @@ app.layout = dmc.MantineProvider(
                                 # Left COLUMN
                                 html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
                                 html.Div("Click on a point to see details. (disabled for now)", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
+                                
                                 #BAR CHART
                                 html.Div(
                                     children=[
@@ -207,6 +188,10 @@ app.layout = dmc.MantineProvider(
                                                 {
                                                     "label": html.Span(['Shark Species'], style={'color': '#fff', 'backgroundColor': '#000'}),
                                                     "value": 'Shark.common.name',
+                                                },
+                                                {
+                                                    "label": html.Span(['Location'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                                    "value": 'Location',
                                                 },
                                                 {
                                                     "label": html.Span(['Victim Activity'], style={'color': '#fff', 'backgroundColor': '#000'}),
@@ -265,6 +250,10 @@ app.layout = dmc.MantineProvider(
                                         ]
 
                                 ),
+                                dcc.Graph(
+                                    id="line-chart",
+                                    style={"flex": "1", "overflow": "hidden", "padding": 0, "marginTop": "5%", "height": "50vh", "width": "100%"},
+                                ),
                                 html.Button(
                                     "Reset Zoom", 
                                     id="reset_button", 
@@ -310,11 +299,11 @@ bar_colors = []
     Output('bar-chart', 'figure'),
     [Input('dropdown-axis-bar', 'value'), Input('filter-options-bar', 'value'),Input("switch_log_scale", "checked")]
 )
-def update_bar_chart(selected_attribute, filter_option, log_scale):
+def update_charts(selected_attribute, filter_option, log_scale):
     global bar_colors
 
     # Count occurrences of each unique value in the selected attribute
-    counts = data[selected_attribute].value_counts(dropna=False).reset_index()
+    counts = data[selected_attribute].value_counts().reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
 
     # Define a dictionary to map original column names to desired names
@@ -348,7 +337,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     bar_colors = filtered_counts[selected_attribute_renamed].map(color_coding(selected_attribute))
 
     # Create a bar chart using Plotly Graph Objects
-    fig = go.Figure(data=[
+    bar_chart = go.Figure(data=[
         go.Bar(
             x=filtered_counts[selected_attribute_renamed],  # Set x-axis values
             y=filtered_counts['Occurrences'],  # Set y-axis values
@@ -357,14 +346,14 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
             hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',  # Customize hover text
         )
     ])
-   
+
     if log_scale:
         yaxis_type="log"
     else:
         yaxis_type="linear"
    
     # Adjust layout for better readability and additional options
-    fig.update_layout(
+    bar_chart.update_layout(
         title=f"{selected_attribute_renamed} by Frequency ({filter_option.replace('_', ' ').capitalize()})",
         xaxis=dict(
             title= selected_attribute_renamed,
@@ -376,8 +365,35 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
         ),
         template='plotly_dark',  # Set the dark theme
     )
+    return bar_chart
+'''
+    major_lacerations_data = data[(data['Injury.severity'] == 'major lacerations') & data['Incident.year'].notna()]
+    major_lacerations_counts = major_lacerations_data.groupby('Incident.year').size().reset_index(name='Occurrences')
 
-    return fig
+    # Create the line chart for "Major Lacerations" only
+    line_chart = go.Figure(data=[
+        go.Scatter(
+            x=major_lacerations_counts['Incident.year'],
+            y=major_lacerations_counts['Occurrences'],
+            mode='lines+markers',
+            name='major lacerations',
+            hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',
+        )
+    ])
+    line_chart.update_layout(
+        title="Occurrences of Major Lacerations Over Years",
+        xaxis=dict(
+            title="Year",
+            type="linear",  # Keep the x-axis linear for years
+        ),
+        yaxis=dict(
+            title="Number of Occurrences",
+            type="log" if log_scale else "linear",  # Apply log scale if enabled
+        ),
+        template='plotly_dark',  # Set the dark theme
+    )
+'''
+
 
 
 # Callback to handle all interactions with the map
@@ -385,7 +401,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     [Output("shark-map", "figure"),
      Output("previous-dropdown-value", "children"),
      Output('bar-chart', 'clickData'),
-     Output('shark-map', 'clickData')],
+     Output('line-chart', 'figure')],
     [Input("bar-chart", "clickData"),
      Input("dropdown-axis-bar", "value"),
      Input("shark-map", "clickData"), 
@@ -395,8 +411,6 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 )
 def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, reset_clicks, previous_attribute):
     global clicked_categories
-    global fig
-
     ctx = dash.callback_context
 
     # If no triggered inputs, return the initial state
@@ -419,13 +433,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Handle map marker click for zooming into a location
     if triggered_id == "shark-map" and map_click_data:
-
         # Extract latitude and longitude of the clicked marker
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
-        # fig = go.Figure()
-        fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
             lat=data["Latitude"],
@@ -445,6 +456,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             showlegend=False,
             dragmode=False
         )
+
         return fig, selected_attribute, None, None
 
     # Handle bar-chart click for filtering map points
@@ -483,10 +495,14 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             return fig, selected_attribute, None, None
     
         new_fig = go.Figure()
+        line_chart = go.Figure()
 
         # Plot all clicked categories
         for category, color in clicked_categories:
             filtered_map_df = data[data[selected_attribute] == category]
+            #filtered_data = data[(data[selected_attribute] == selected_attribute) & data['Incident.year'].notna()]
+            yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+            print(yearly_counts)
             new_fig.add_trace(go.Scattermapbox(
                 lat=filtered_map_df['Latitude'],
                 lon=filtered_map_df['Longitude'],
@@ -495,6 +511,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 text=filtered_map_df['Reference'],
                 showlegend=False
             ))
+
+            line_chart.add_trace(go.Scatter(
+                x=yearly_counts['Incident.year'],
+                y=yearly_counts['Occurrences'],
+                mode='lines+markers',
+                name=category,
+                hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',
+                line=dict(color=color),
+                marker=dict(color=color)
+            ))
+
         new_fig.update_layout(
             mapbox=dict(
                 style="carto-darkmatter",
@@ -504,13 +531,27 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             margin={"l": 0, "r": 0, "t": 0, "b": 0},
             dragmode=False
         )
-        return new_fig, selected_attribute, None, None
+
+        # Update the line chart layout
+        line_chart.update_layout(
+            title=f"Occurrences of Selected Categories Over Years",
+            xaxis=dict(
+                title="Year",
+                type="linear",  # Keep the x-axis linear for years
+            ),
+            yaxis=dict(
+                title="Number of Occurrences",
+                type="linear",  # Apply log scale if enabled
+            ),
+            template='plotly_dark',  # Set the dark theme
+        )
+            
+        return new_fig, selected_attribute, None, line_chart
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
-        
         # Remove all traces except the initial one
-        fig= initial_fig_clustered()
+        fig.data = fig.data[:1]
 
         # Reset map to default view
         fig.update_layout(
@@ -524,8 +565,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Default return
     return fig, selected_attribute, None, None
-
-
 
 if __name__ == "__main__":
     app.run_server(debug=True)
