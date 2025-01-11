@@ -119,7 +119,7 @@ def color_coding(attribute):
         shark_types = data[attribute].unique()
         color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
         color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
-        data["Shark.color"] = data[attribute].map(color_map)
+        data["Victim.color"] = data[attribute].map(color_map)
 
     return color_map
 
@@ -132,14 +132,13 @@ def initial_fig_clustered():
         lat=new_df["Latitude"],
         lon=new_df["Longitude"],
         mode="markers+text",
-        marker=dict(size=15, color='blue'),
+        marker=dict(size=20, color='blue'),
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
         textfont=dict(color='white'),
-        hovertext="Cick to see the details",  # Text displayed on hover
+        hovertext="Please select an attribute first",  # Text displayed on hover
         hoverinfo="text",  # Text displayed on hover
         customdata=data.index,  # Pass row indices as custom data
-
     ))
 
     # Final map settings
@@ -156,6 +155,43 @@ def initial_fig_clustered():
     return fig
 
 fig = initial_fig_clustered()
+
+def initial_line_chart():
+    line_chart = go.Figure()
+
+    # Add an annotation to display the initial message
+    line_chart.add_annotation(
+        text="Click on the bar chart to see the yearly progress",
+        xref="paper", yref="paper",
+        x=0.5, y=0.5, showarrow=False,
+        font=dict(size=20, color="white"),
+        align="center"
+    )
+
+    # Optionally, you can set the layout to ensure the annotation is centered
+    line_chart.update_layout(
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+    )
+    return line_chart
+
+line_chart = initial_line_chart()
+
+
+def attribute_rename(selected_attribute):
+    # Define a dictionary to map original column names to desired names
+    attribute_name_mapping = {
+        'Injury.severity': 'Injury Severity',
+        'Shark.common.name': 'Shark Species',
+        'Victim.activity': 'Victim Activity',
+        # Add more mappings as needed
+    }
+    # Update the selected_attribute if it is one of the renamed columns
+    selected_attribute_renamed = attribute_name_mapping.get(selected_attribute, selected_attribute)
+
+    return selected_attribute_renamed, attribute_name_mapping
 
 # Dash app
 app = dash.Dash(__name__)
@@ -180,7 +216,7 @@ app.layout = dmc.MantineProvider(
                             id="resizable-sidebar",
                             style={
                                 "margin": 0,
-                                "padding": "30px",
+                                "padding": "15px",
                                 "height": "100vh",
                                 "backgroundColor": "#000",  # Black background color
                                 "color": "#fff",  # Light text color
@@ -192,41 +228,49 @@ app.layout = dmc.MantineProvider(
                             children=[
                                 # Left COLUMN
                                 html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
-                                html.Div("Click on a point to see details. (disabled for now)", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
+                                html.Div("Click on a point to see details.", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
+                                html.Label("Select Attribute for Bar Chart:", style={'color': '#fff'}),  # Light text color
+                                dcc.Dropdown(
+                                    id='dropdown-axis-bar',
+                                    options=[
+                                        # {
+                                        #     "label": html.Span(['Select an Attribute'], style={'color': '#fff', 'backgroundColor': '#000'}),  
+                                        #     "value": 'nothing',
+                                        # },
+                                        {
+                                            "label": html.Span(['Injury Severity'], style={'color': '#fff', 'backgroundColor': '#000'}),  
+                                            "value": 'Injury.severity',
+                                        },
+                                        {
+                                            "label": html.Span(['Shark Species'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                            "value": 'Shark.common.name',
+                                        },
+                                        {
+                                            "label": html.Span(['Victim Activity'], style={'color': '#fff', 'backgroundColor': '#000'}),
+                                            "value": 'Victim.activity',
+                                        }
+                                    ],
+                                    value=None,  # Default value
+                                    clearable=False,
+                                    style={
+                                        'marginTop': '5px',
+                                        'marginBottom': '20px',
+                                        'color': '#fff',  # Light text color
+                                        'backgroundColor': '#000',  # Black background color
+                                        'width': '75%',
+                                        'height'   : '40px',
+                                    }
+                                ),
                                 #BAR CHART
                                 html.Div(
+                                    id='bar-chart-container',
+                                    style={'display':'none'},
                                     children=[
-                                        html.Label("Select Attribute for Bar Chart:", style={'marginBottom': '10px', 'color': '#fff'}),  # Light text color
-                                        dcc.Dropdown(
-                                            id='dropdown-axis-bar',
-                                            options=[
-                                                {
-                                                    "label": html.Span(['Injury Severity'], style={'color': '#fff', 'backgroundColor': '#000'}),  
-                                                    "value": 'Injury.severity',
-                                                },
-                                                {
-                                                    "label": html.Span(['Shark Species'], style={'color': '#fff', 'backgroundColor': '#000'}),
-                                                    "value": 'Shark.common.name',
-                                                },
-                                                {
-                                                    "label": html.Span(['Victim Activity'], style={'color': '#fff', 'backgroundColor': '#000'}),
-                                                    "value": 'Victim.activity',
-                                                }
-                                            ],
-                                            value='Injury.severity',  # Default value
-                                            clearable=False,
-                                            style={
-                                                'marginBottom': '10px',
-                                                'marginTop': '10px',
-                                                'color': '#fff',  # Light text color
-                                                'backgroundColor': '#000',  # Black background color
-                                            }
-                                        ),
 
                                         html.Label("Filter Options:", style={'marginBottom': '10px', "color": "#fff"}),  # Light text color
                                         dmc.SegmentedControl(
                                             id='filter-options-bar',
-                                            style = {'marginBottom': '10px', "color": "#fff"},
+                                            style = {'marginBottom': '25px', "color": "#fff"},
                                             orientation="horizontal",
                                             fullWidth=True,
                                             value='top_10',  # Default option
@@ -236,49 +280,56 @@ app.layout = dmc.MantineProvider(
                                                 {'label': 'Show All', 'value': 'all'}
                                                 ]
                                         ),
+                                        dmc.Grid( justify="center", align="center", 
+                                            style={"marginBottom": 15,"marginLeft": 5, "padding": 0},
+                                            children=[
+                                                dmc.Col(
+                                                    span=4,
+                                                    children=[
+                                                        dmc.Switch(
+                                                            id="switch_log_scale",
+                                                            label="Log Scale",
+                                                        ),
+                                                    ],
+                                                ),
+                                                dmc.Col(
+                                                    span=4,
+                                                    children=[
+                                                        dmc.Switch(
+                                                            id="switch_comparison",
+                                                            label="Select Multiple",
+                                                        ),
+                                                    ],
+                                                ),
+                                                dmc.Col(
+                                                    span=4,
+                                                    children=[
+                                                        dmc.Button(
+                                                            "Reset Zoom", 
+                                                            id="reset_button", 
+                                                            n_clicks=0,
+                                                            variant="gradient",
+                                                            gradient={"from": "teal", "to": "blue", "deg": 60},
 
+                                                            style={
+                                                                "color": "white",
+                                                                "width": "100%",
+                                                                "align": "center",
+                                                            }
+                                                        ),
+                                                    ]
+                                                )
+                                            ]
+
+                                        ),
                                         html.Label("Click on a bar to see the points:", style={'marginBottom': '10px', "color": "#fff"}), 
-                                        dcc.Graph(id='bar-chart', style={'marginBottom': '10px'}),
+                                        dcc.Graph(id='bar-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
+                                        dcc.Graph(id='line-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
                                         
                                 ]),
                                 html.Div(id='previous-dropdown-value', style={'display': 'none'}),
-                                dmc.Grid( justify="center", align="center", 
-                                    children=[
-                                        dmc.Col(
-                                            span=6,
-                                            children=[
-                                                dmc.Switch(
-                                                    id="switch_log_scale",
-                                                    label="Log Scale",
-                                                ),
-                                            ],
-                                        ),
-                                        dmc.Col(
-                                            span=6,
-                                            children=[
-                                                dmc.Switch(
-                                                    id="switch_comparison",
-                                                    label="COMPARE",
-                                                ),
-                                            ],
-                                        ),
-                                        ]
-
-                                ),
-                                html.Button(
-                                    "Reset Zoom", 
-                                    id="reset_button", 
-                                    n_clicks=0,
-                                    style={
-                                        "marginTop": "20px",
-                                        "backgroundColor": "red",  # Optional: Add background color for visibility
-                                        "border": "none",
-                                        "padding": "10px",
-                                        "color": "white",
-                                        "width": "25%",
-                                        "align": "center",
-                                    }
-                                ),
+                                
+                                
                                 html.H2("", style={"marginBottom": "50px", "color": "#fff"}),  # To give unvisible bottom margin
 
                             ],
@@ -292,6 +343,7 @@ app.layout = dmc.MantineProvider(
                         dcc.Graph(
                             id="shark-map",
                             figure=fig,
+                            config={'displayModeBar': False},
                             style={"flex": "1", "overflow": "hidden","padding": 0, "margin": 0, "height":"100vh", "width":"100w"},  # Map resizes with the sidebar
                         ),
                     ],
@@ -301,9 +353,20 @@ app.layout = dmc.MantineProvider(
     ],
 )
 
+
 # Global variable to store clicked categories and their colors
 clicked_categories = []
 bar_colors = []
+
+@app.callback(
+    Output('bar-chart-container', 'style'),
+    Input('dropdown-axis-bar', 'value')
+)
+def update_visibility(selected_attribute):
+    if selected_attribute:
+        return {'display': 'block'}  # Show the division
+    return {'display': 'none'}  # Hide the division
+
 
 # Callback to update the bar chart 
 @app.callback(
@@ -312,37 +375,30 @@ bar_colors = []
 )
 def update_bar_chart(selected_attribute, filter_option, log_scale):
     global bar_colors
+    
 
+    if not selected_attribute:
+        return go.Figure()
+    
     # Count occurrences of each unique value in the selected attribute
     counts = data[selected_attribute].value_counts(dropna=False).reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
 
-    # Define a dictionary to map original column names to desired names
-    column_name_mapping = {
-        'Injury.severity': 'Injury Severity',
-        'Shark.common.name': 'Shark Species',
-        'Victim.activity': 'Victim Activity',
-        # Add more mappings as needed
-    }
-
+    # Update the selected_attribute if it is one of the renamed columns
+    selected_attribute_renamed, column_name_mapping = attribute_rename(selected_attribute)
+    
     # Rename the columns in the DataFrame
     counts.rename(columns=column_name_mapping, inplace=True)
-
-    # Update the selected_attribute if it is one of the renamed columns
-    selected_attribute_renamed = column_name_mapping.get(selected_attribute, selected_attribute)
 
     # Apply filtering based on the selected filter option
     if filter_option == 'top_10':
         filtered_counts = counts.nlargest(10, 'Occurrences')  # Top 10
-        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total descending'
     elif filter_option == 'bottom_10':
         filtered_counts = counts.nsmallest(10, 'Occurrences')  # Bottom 10
-        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total ascending'
     else:  # Show all
         filtered_counts = counts
-        # colors = [f"rgb({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)})" for _ in range(len(filtered_counts))]
         category_order = 'total descending'
 
     bar_colors = filtered_counts[selected_attribute_renamed].map(color_coding(selected_attribute))
@@ -385,7 +441,8 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
     [Output("shark-map", "figure"),
      Output("previous-dropdown-value", "children"),
      Output('bar-chart', 'clickData'),
-     Output('shark-map', 'clickData')],
+     Output('shark-map', 'clickData'),
+     Output('line-chart', 'figure')],
     [Input("bar-chart", "clickData"),
      Input("dropdown-axis-bar", "value"),
      Input("shark-map", "clickData"), 
@@ -396,17 +453,28 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
 def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, reset_clicks, previous_attribute):
     global clicked_categories
     global fig
+    global line_chart
 
     ctx = dash.callback_context
 
+    # If no attribute is selected, return the initial state
+    if selected_attribute is None: 
+        return fig, None, None, None, line_chart  
+
+    # Update the hover text
+    fig.update_traces(go.Scattermapbox(
+        hovertext="Click on to zoom",  # Text displayed on hover
+        marker=dict(size=20, color='#5506d6')
+    ))
+
     # If no triggered inputs, return the initial state
     if not ctx.triggered:
-        return fig, selected_attribute, None, None
+        return fig, selected_attribute, None, None, line_chart
 
     # Determine which input triggered the callback
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-     # Define a dictionary to map original column names to desired names
+    # Define a dictionary to map original column names to desired names
     attribute_color_mapping = {
         'Injury.severity': 'Injury.color',
         'Shark.common.name': 'Shark.color',
@@ -424,7 +492,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
-        # fig = go.Figure()
         fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
@@ -432,7 +499,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             lon=data["Longitude"],
             mode="markers",
             marker=dict(size=15, color= data[color_column]),
-            text=data["Injury.severity"],  # Hover text
+            text=data[selected_attribute],  # Hover text
             customdata=data.index,  # Pass row indices as custom data
         ))
         
@@ -445,14 +512,15 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             showlegend=False,
             dragmode=False
         )
-        return fig, selected_attribute, None, None
+        return fig, selected_attribute, None, None, line_chart
 
     # Handle bar-chart click for filtering map points
     elif triggered_id == "bar-chart" and bar_click_data:
-        # Check current zoom level to determine if bar chart interaction is allowed
+        
+        # # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute, None, None
+            return fig, selected_attribute, None, None, line_chart
 
         if previous_attribute is None:
             previous_attribute = selected_attribute
@@ -460,7 +528,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Reset if the attribute changes or no data
         if bar_click_data is None or selected_attribute != previous_attribute:
             clicked_categories = []
-            return fig, selected_attribute, None, None
+            return fig, selected_attribute, None, None, line_chart
 
         # Filter map points based on bar chart selection
         clicked_category = bar_click_data['points'][0]['x']
@@ -480,13 +548,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         # If clicked_categories is empty, return the initial figure
         if not clicked_categories:
-            return fig, selected_attribute, None, None
+            return fig, selected_attribute, None, None, line_chart
     
+        selected_attribute_renamed = attribute_rename(selected_attribute)[0]
+        
         new_fig = go.Figure()
-
+        line_chart = go.Figure()
+        
         # Plot all clicked categories
         for category, color in clicked_categories:
             filtered_map_df = data[data[selected_attribute] == category]
+            yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+
             new_fig.add_trace(go.Scattermapbox(
                 lat=filtered_map_df['Latitude'],
                 lon=filtered_map_df['Longitude'],
@@ -495,6 +568,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 text=filtered_map_df['Reference'],
                 showlegend=False
             ))
+
+            line_chart.add_trace(go.Scatter(
+                x=yearly_counts['Incident.year'],
+                y=yearly_counts['Occurrences'],
+                mode='lines+markers',
+                name=category,
+                hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',
+                line=dict(color=color),
+                marker=dict(color=color)
+            ))
+
         new_fig.update_layout(
             mapbox=dict(
                 style="carto-darkmatter",
@@ -504,7 +588,31 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             margin={"l": 0, "r": 0, "t": 0, "b": 0},
             dragmode=False
         )
-        return new_fig, selected_attribute, None, None
+        
+        # Update the line chart layout
+        line_chart.update_layout(
+            title=f"Occurrences of {selected_attribute_renamed} Over Years",
+            xaxis=dict(
+                title="Year",
+                type="linear",  # Keep the x-axis linear for years
+            ),
+            yaxis=dict(
+                title="Number of Occurrences",
+                type="linear",  # Apply log scale if enabled
+            ),
+            template='plotly_dark',  # Set the dark theme
+            legend=dict(
+                x=0.5,  # Horizontal position (0 to 1)
+                y=1,    # Vertical position (0 to 1)
+                xanchor='center',  # Anchor the legend horizontally at the center
+                yanchor='top',     # Anchor the legend vertically at the top
+                bgcolor='rgba(0,0,0,0)',  # Background color of the legend (transparent)
+                bordercolor='rgba(255,255,255,0.5)',  # Border color of the legend
+                borderwidth=1  # Border width of the legend
+            )
+        )
+
+        return new_fig, selected_attribute, None, None, line_chart
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
@@ -520,10 +628,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             dragmode=False
         )
-        return fig, selected_attribute , None, None
+        return fig, selected_attribute , None, None, line_chart
 
     # Default return
-    return fig, selected_attribute, None, None
+    return fig, selected_attribute, None, None, line_chart
 
 
 
