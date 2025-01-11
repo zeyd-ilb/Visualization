@@ -57,11 +57,11 @@ def location_cluster():
     # CLUSTER LOCATIONS
 
     # Clean the Longitude column by removing trailing periods
-    data["Longitude"] = data["Longitude"].str.rstrip('.')
+    #data["Longitude"] = data["Longitude"].str.rstrip('.')
     data["Longitude"] = [float(x) for x in data["Longitude"]]
 
     # Clean the Latitude column by removing trailing periods
-    data["Latitude"] = data["Latitude"].str.rstrip('.')
+    #data["Latitude"] = data["Latitude"].str.rstrip('.')
     data["Latitude"] = [float(x) for x in data["Latitude"]]
 
     coords = data[["Latitude", "Longitude"]]
@@ -73,11 +73,13 @@ def location_cluster():
     
     outliers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
     i = outliers[(outliers.Cluster < 4)].index
-
         
     new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
     new_df.drop(i, inplace=True)
+
     
+    new_df.rename_axis("Cluster_ID", inplace=True)
+
     cluster_sizes = []
 
     for count in outliers.Cluster:
@@ -465,6 +467,7 @@ def update_visibility(selected_attribute):
 )
 def update_bar_chart(selected_attribute, filter_option, log_scale):
     global bar_colors
+    global bar_fig
 
     if not selected_attribute:
         return go.Figure()
@@ -544,6 +547,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global fig
     global line_chart
     global once
+    global merged_df
+    global basic_df
 
     ctx = dash.callback_context
 
@@ -604,11 +609,14 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
+        lat_new_df = new_df[new_df["Latitude"] == lat]
+        merged_df = data.merge(lat_new_df, on="Cluster", suffixes=("_data", "_new_df"))
+
         fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
-            lat=data["Latitude"],
-            lon=data["Longitude"],
+            lat=merged_df["Latitude_data"],
+            lon=merged_df["Longitude_data"],
             mode="markers",
             marker=dict(size=15, color= data[color_column]),
             text=data[selected_attribute],  # Hover text
@@ -655,8 +663,11 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         # Plot all clicked categories
         for category, color in clicked_categories:
-            filtered_map_df = data[data[selected_attribute] == category]
+            filtered_map_df = merged_df[merged_df[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+            basic_map = data[data[selected_attribute] == category]
+            basic_df = basic_map.groupby('Incident.year').size().reset_index(name='Occurrences')
+
 
             line_chart.add_trace(go.Scatter(
                 x=yearly_counts['Incident.year'],
@@ -700,12 +711,12 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         # Plot all clicked categories
         for category, color in clicked_categories:
-            filtered_map_df = data[data[selected_attribute] == category]
+            filtered_map_df = merged_df[merged_df[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
 
             new_fig.add_trace(go.Scattermapbox(
-                lat=filtered_map_df['Latitude'],
-                lon=filtered_map_df['Longitude'],
+                lat=filtered_map_df['Latitude_data'],
+                lon=filtered_map_df['Longitude_data'],
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=15, color=color),
                 text=filtered_map_df['Reference'],
@@ -739,6 +750,12 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             dragmode=False
         )
+
+        line_chart.update_traces(go.Bar(
+            x=basic_df['Incident.year'],
+            y=basic_df['Occurrences']
+        ))
+
         return fig, selected_attribute , None, None, line_chart
 
     # Default return
