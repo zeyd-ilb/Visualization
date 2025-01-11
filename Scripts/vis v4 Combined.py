@@ -2,10 +2,7 @@ import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
-import requests
 import plotly.express as px
-import json
-import random
 from dash.dependencies import Input, Output, State
 import dash_mantine_components as dmc
 from sklearn.cluster import DBSCAN
@@ -13,6 +10,7 @@ import numpy as np
 from dash import Input, Output, State
 import seaborn as sns
 import matplotlib.colors as mcolors
+from math import log1p
 
 
 # Load the shark attack data
@@ -123,7 +121,6 @@ def color_coding(attribute):
 
     return color_map
 
-
 once = True
 def annotation_shape():
     # Add an annotation
@@ -205,7 +202,6 @@ def initial_line_chart():
 
 line_chart = initial_line_chart()
 
-
 def attribute_rename(selected_attribute):
     # Define a dictionary to map original column names to desired names
     attribute_name_mapping = {
@@ -218,6 +214,74 @@ def attribute_rename(selected_attribute):
     selected_attribute_renamed = attribute_name_mapping.get(selected_attribute, selected_attribute)
 
     return selected_attribute_renamed, attribute_name_mapping
+
+def parallel_chart():
+    
+    # Define the data directly within the file
+    data = {
+        "State": ["NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"],
+        "Number of Incidents": [449, 19, 372, 81, 28, 71, 213],
+        "Population": [8469.6, 254.3, 5560.5, 1873.8, 575.7, 6959.2, 2951.6],
+        "Tourism": [3702, 202, 2124, 451, 256, 2489, 819],
+        "Coastline": [2137, 10953, 13347, 5067, 4882, 2512, 20781]
+    }
+
+    ratio_data = {
+        "State": ["NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"],
+        "Provoked": [109, 8, 142, 26, 16, 18, 83],
+        "Unprovoked": [338, 11, 227, 55, 12, 53, 128],
+        "Provoked/Unprovoked Ratio": [0.24384787472035793, 0.42105263157894735, 0.38482384823848237, 0.32098765432098764, 0.5714285714285714, 0.2535211267605634, 0.3933649289099526],
+    }
+
+    df = pd.DataFrame(data)
+    ratio_df = pd.DataFrame(ratio_data)
+
+    # Merge the datasets
+    df = pd.merge(df, ratio_df, on="State")
+
+    # Log transformation and normalization
+    def log_transform_and_normalize(series):
+        log_transformed = series.apply(log1p)  # log1p ensures log(0+1) = 0
+        return log_transformed / log_transformed.max()
+
+    df["Normalized Incidents"] = log_transform_and_normalize(df["Number of Incidents"])
+    df["Normalized Population"] = log_transform_and_normalize(df["Population"])
+    df["Normalized Tourism"] = log_transform_and_normalize(df["Tourism"])
+    df["Normalized Coastline"] = log_transform_and_normalize(df["Coastline"])
+
+    # Define the columns to plot
+    normalized_columns = [
+        "Normalized Incidents", 
+        "Normalized Population", 
+        "Normalized Tourism", 
+        "Normalized Coastline"
+    ]
+
+    # Create the line plot
+    line_fig = go.Figure()
+
+    for state in df["State"].unique():
+        state_data = df[df["State"] == state]
+        line_fig.add_trace(go.Scatter(
+            x=normalized_columns,
+            y=state_data[normalized_columns].values[0],
+            mode='lines+markers',
+            name=state
+        ))
+
+    # Update layout
+    line_fig.update_layout(
+        template="plotly_dark",
+        title="Parallel Coordinate Plot of States",
+        xaxis_title="Metrics",
+        yaxis_title="Normalized Values",
+        xaxis=dict(tickmode='array', tickvals=list(range(len(normalized_columns))), ticktext=normalized_columns),
+        legend_title="State"
+    )
+
+    return line_fig  
+
+line_fig = parallel_chart()
 
 # Dash app
 app = dash.Dash(__name__)
@@ -253,8 +317,7 @@ app.layout = dmc.MantineProvider(
                             },
                             children=[
                                 # Left COLUMN
-                                html.H2("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
-                                html.Div("Click on a point to see details.", id="incident-details", style={"marginBottom": "20px", "color": "#fff"}),  # Light text color
+                                html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
                                 html.Label("Select Attribute for Bar Chart:", style={'color': '#fff'}),  # Light text color
                                 dcc.Dropdown(
                                     id='dropdown-axis-bar',
@@ -351,11 +414,11 @@ app.layout = dmc.MantineProvider(
                                         html.Label("Click on a bar to see the points:", style={'marginBottom': '10px', "color": "#fff"}), 
                                         dcc.Graph(id='bar-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
                                         dcc.Graph(id='line-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
+                                        html.H1("Parallel Coordinate Plot for States"),
+                                        dcc.Graph(id="parallel-coordinate-plot", figure=line_fig),
                                         
                                 ]),
-                                html.Div(id='previous-dropdown-value', style={'display': 'none'}),
-                                
-                                
+                                html.Div(id='previous-dropdown-value', style={'display': 'none'}),                                
                                 html.H2("", style={"marginBottom": "50px", "color": "#fff"}),  # To give unvisible bottom margin
 
                             ],
@@ -566,12 +629,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Handle bar-chart click for filtering map points
     elif triggered_id == "bar-chart" and bar_click_data:
-        
-        # # Check current zoom level to determine if bar chart interaction is allowed
-        current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
-        if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute, None, None, line_chart
-
+       
         # Filter map points based on bar chart selection
         clicked_category = bar_click_data['points'][0]['x']
         marker_color = bar_click_data['points'][0]['customdata']  # Get color from bar
@@ -593,23 +651,13 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             return fig, selected_attribute, None, None, line_chart
     
         selected_attribute_renamed = attribute_rename(selected_attribute)[0]
-        
-        new_fig = go.Figure()
+
         line_chart = go.Figure()
         
         # Plot all clicked categories
         for category, color in clicked_categories:
             filtered_map_df = data[data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
-
-            new_fig.add_trace(go.Scattermapbox(
-                lat=filtered_map_df['Latitude'],
-                lon=filtered_map_df['Longitude'],
-                mode='markers',
-                marker=go.scattermapbox.Marker(size=15, color=color),
-                text=filtered_map_df['Reference'],
-                showlegend=False
-            ))
 
             line_chart.add_trace(go.Scatter(
                 x=yearly_counts['Incident.year'],
@@ -620,16 +668,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 line=dict(color=color),
                 marker=dict(color=color)
             ))
-
-        new_fig.update_layout(
-            mapbox=dict(
-                style="carto-darkmatter",
-                zoom=current_zoom,  # Keep the current zoom level
-                center={"lat": fig.layout.mapbox.center.lat, "lon": fig.layout.mapbox.center.lon},  # Keep current center
-            ),
-            margin={"l": 0, "r": 0, "t": 0, "b": 0},
-            dragmode=False
-        )
         
         # Update the line chart layout
         line_chart.update_layout(
@@ -653,6 +691,38 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 borderwidth=1  # Border width of the legend
             )
         )
+
+        # Check current zoom level to determine if bar chart interaction is allowed
+        current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
+        if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
+            return fig, selected_attribute, None, None, line_chart
+
+        new_fig = go.Figure()
+        
+        # Plot all clicked categories
+        for category, color in clicked_categories:
+            filtered_map_df = data[data[selected_attribute] == category]
+            yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+
+            new_fig.add_trace(go.Scattermapbox(
+                lat=filtered_map_df['Latitude'],
+                lon=filtered_map_df['Longitude'],
+                mode='markers',
+                marker=go.scattermapbox.Marker(size=15, color=color),
+                text=filtered_map_df['Reference'],
+                showlegend=False
+            ))
+
+        new_fig.update_layout(
+            mapbox=dict(
+                style="carto-darkmatter",
+                zoom=current_zoom,  # Keep the current zoom level
+                center={"lat": fig.layout.mapbox.center.lat, "lon": fig.layout.mapbox.center.lon},  # Keep current center
+            ),
+            margin={"l": 0, "r": 0, "t": 0, "b": 0},
+            dragmode=False
+        )
+        
 
         return new_fig, selected_attribute, None, None, line_chart
 
