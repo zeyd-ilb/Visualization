@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"

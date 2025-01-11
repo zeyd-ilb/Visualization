@@ -15,7 +15,7 @@ from math import log1p
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
+data = pd.read_csv("Scripts/Australian Shark-Incident Database Public Version.csv")
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
