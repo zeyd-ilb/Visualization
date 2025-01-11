@@ -14,8 +14,8 @@ from math import log1p
 
 
 # Load the shark attack data
-# data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv("Scripts/Australian Shark-Incident Database Public Version.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
+# data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -418,7 +418,8 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id="parallel-coordinate-plot", figure=line_fig),
                                         
                                 ]),
-                                html.Div(id='previous-dropdown-value', style={'display': 'none'}),                                
+                                html.Div(id='previous-dropdown-value', style={'display': 'none'}),
+                               
                                 html.H2("", style={"marginBottom": "50px", "color": "#fff"}),  # To give unvisible bottom margin
 
                             ],
@@ -577,7 +578,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     #map the attribute to the color column
     color_column = attribute_color_mapping.get(selected_attribute, selected_attribute)
 
-
     if previous_attribute is None:
         previous_attribute = selected_attribute
 
@@ -594,7 +594,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             text=data[selected_attribute],  # Hover text
             customdata=data.index,  # Pass row indices as custom data
         ))
-
 
         return fig, selected_attribute, None, None, line_chart
 
