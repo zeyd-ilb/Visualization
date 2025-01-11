@@ -123,6 +123,30 @@ def color_coding(attribute):
 
     return color_map
 
+
+once = True
+def annotation_shape():
+    # Add an annotation
+    fig.add_annotation(
+        text="Please Select an Attribute First",
+        xref="paper", yref="paper",
+        x=0.25, y=0.92, showarrow=False,
+        font=dict(size=24, color="white"),
+        align="center",
+    )
+
+    # Add a shape
+    fig.add_shape(
+        type="rect",
+        x0=0.20, y0=0.87, x1=0.80, y1=0.92,
+        xref="paper", yref="paper",
+        line=dict(color="RoyalBlue"),
+        fillcolor="LightSkyBlue",
+        opacity=0.5
+    )
+
+    return fig
+
 def initial_fig_clustered():
     # Create the base map
     fig = go.Figure()
@@ -152,9 +176,11 @@ def initial_fig_clustered():
         dragmode=False,
         showlegend=False,
     )
+
     return fig
 
 fig = initial_fig_clustered()
+fig = annotation_shape()    
 
 def initial_line_chart():
     line_chart = go.Figure()
@@ -375,7 +401,6 @@ def update_visibility(selected_attribute):
 )
 def update_bar_chart(selected_attribute, filter_option, log_scale):
     global bar_colors
-    
 
     if not selected_attribute:
         return go.Figure()
@@ -454,18 +479,22 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global clicked_categories
     global fig
     global line_chart
+    global once
 
     ctx = dash.callback_context
 
     # If no attribute is selected, return the initial state
     if selected_attribute is None: 
         return fig, None, None, None, line_chart  
-
-    # Update the hover text
-    fig.update_traces(go.Scattermapbox(
-        hovertext="Click on to zoom",  # Text displayed on hover
-        marker=dict(size=20, color='#5506d6')
-    ))
+    if once:
+        fig = initial_fig_clustered()
+        once = False    
+    
+        # Update the hover text
+        fig.update_traces(go.Scattermapbox(
+            hovertext="Click on to zoom",  # Text displayed on hover
+            marker=dict(size=20, color='#5506d6'),
+        ))
 
     # If no triggered inputs, return the initial state
     if not ctx.triggered:
@@ -484,6 +513,27 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     #map the attribute to the color column
     color_column = attribute_color_mapping.get(selected_attribute, selected_attribute)
+
+
+    if previous_attribute is None:
+        previous_attribute = selected_attribute
+
+    # Reset if the attribute changes or no data
+    if selected_attribute != previous_attribute:
+        clicked_categories = []
+        # fig.data = []
+
+        # Recolor the shark points based on the new attribute
+        fig.add_trace(go.Scattermapbox(
+            lat=data["Latitude"],
+            lon=data["Longitude"],
+            marker=dict(size=15, color= data[color_column]),
+            text=data[selected_attribute],  # Hover text
+            customdata=data.index,  # Pass row indices as custom data
+        ))
+
+
+        return fig, selected_attribute, None, None, line_chart
 
     # Handle map marker click for zooming into a location
     if triggered_id == "shark-map" and map_click_data:
@@ -520,14 +570,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute, None, None, line_chart
-
-        if previous_attribute is None:
-            previous_attribute = selected_attribute
-
-        # Reset if the attribute changes or no data
-        if bar_click_data is None or selected_attribute != previous_attribute:
-            clicked_categories = []
             return fig, selected_attribute, None, None, line_chart
 
         # Filter map points based on bar chart selection
@@ -602,7 +644,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             template='plotly_dark',  # Set the dark theme
             legend=dict(
-                x=0.5,  # Horizontal position (0 to 1)
+                x=0.2,  # Horizontal position (0 to 1)
                 y=1,    # Vertical position (0 to 1)
                 xanchor='center',  # Anchor the legend horizontally at the center
                 yanchor='top',     # Anchor the legend vertically at the top
