@@ -396,7 +396,7 @@ app.layout = dmc.MantineProvider(
                                                     span=4,
                                                     children=[
                                                         dmc.Button(
-                                                            "Reset Zoom", 
+                                                            "Reset Map", 
                                                             id="reset_button", 
                                                             n_clicks=0,
                                                             variant="gradient",
@@ -719,7 +719,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 lon=filtered_map_df['Longitude_data'],
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=15, color=color),
-                text=filtered_map_df['Reference'],
+                text=filtered_map_df[selected_attribute],
                 showlegend=False
             ))
 
@@ -750,12 +750,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             dragmode=False
         )
-
-        line_chart.update_traces(go.Bar(
-            x=basic_df['Incident.year'],
-            y=basic_df['Occurrences']
-        ))
-
         return fig, selected_attribute , None, None, line_chart
 
     # Default return
