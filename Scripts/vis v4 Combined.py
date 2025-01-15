@@ -164,6 +164,15 @@ def annotation_shape():
         fillcolor="LightSkyBlue",
         opacity=0.5
     )
+    fig.add_trace(go.Scattermapbox(
+        lat=new_df['Latitude'],  # Ensure you have latitude data
+        lon=new_df['Longitude'],  # Ensure you have longitude data
+        mode='markers',
+        marker=go.scattermapbox.Marker(size=15, color='blue'),
+        hovertext="Please Select an Attribute First",  # Link hovertext to the data
+        hoverinfo='text',  # Show hover text
+
+    ))
 
     return fig
 
@@ -180,7 +189,7 @@ def initial_fig_clustered():
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
         textfont=dict(color='white'),
-        hovertext="Please select an attribute first",  # Text displayed on hover
+        hovertext="Click to zoom",  # Text displayed on hover
         hoverinfo="text",  # Text displayed on hover
         customdata=new_df.index,  # Pass row indices as custom data
     ))
@@ -207,7 +216,7 @@ def initial_line_chart():
 
     # Add an annotation to display the initial message
     line_chart.add_annotation(
-        text="Click on the bar chart to see the yearly progress",
+        text="Select a bar to see the yearly progress",
         xref="paper", yref="paper",
         x=0.5, y=0.5, showarrow=False,
         font=dict(size=20, color="white"),
@@ -313,9 +322,25 @@ def update_pie_chart(shark_species):
     filtered_data = data[data['Shark.common.name'] == shark_species]
     
     # Check if there is any data for the selected shark species
-    if filtered_data.empty:
+    if shark_species == "Default":
+        pie_chart = px.pie(template='plotly_dark')
+        pie_chart.add_annotation(
+            text="Please select a shark species to see the fatality rate",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=20, color="white"),
+            align="center"
+        )
+        pie_chart.update_layout(
+            plot_bgcolor="black",
+            paper_bgcolor="black",
+        )
+    
+        return pie_chart
+    
+    elif filtered_data.empty:
         return px.pie(title=f"No data available for {shark_species}")
-
+    
     # Sample data for the pie chart
     filtered_map_df = filtered_data["Victim.injury"]
     filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
@@ -333,10 +358,10 @@ def update_pie_chart(shark_species):
     
     pie_df = pd.DataFrame(pie_data)
 
-    fig = px.pie(pie_df,template='plotly_dark', names='Category', values='Values', title='Pie Chart for Shark Species: ' + shark_species)
+    fig = px.pie(pie_df,template='plotly_dark', names='Category', values='Values', title='Fatality Rate for Shark Species: ' + shark_species)
     return fig
 
-pie_chart = update_pie_chart("wobbegong")
+pie_chart = update_pie_chart("Default")
 
 # Dash app
 app = dash.Dash(__name__)
@@ -469,9 +494,9 @@ app.layout = dmc.MantineProvider(
                                         html.Label("Click on a bar to see the points:", style={'marginBottom': '10px', "color": "#fff"}), 
                                         dcc.Graph(id='bar-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
                                         dcc.Graph(id='line-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
+                                        dcc.Graph(id='pie-chart'),
                                         html.H1("Parallel Coordinate Plot for States"),
                                         dcc.Graph(id="parallel-coordinate-plot", figure=line_fig),
-                                        dcc.Graph(id='pie-chart'),
                                         
                                 ]),
                                 html.Div(id='previous-dropdown-value', style={'display': 'none'}),
@@ -699,7 +724,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             cluster_id = map_click_data["points"][0]["customdata"] # buraya dikkat
             focused_map_df = data[data["Cluster"] == cluster_id]
 
-
         fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
@@ -758,7 +782,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 else:
                     clicked_categories = [(clicked_category, marker_color)]
             was_compare = False
-            
+
         # If clicked_categories is empty, return the initial figure
         if not clicked_categories:
             return fig, selected_attribute, None, None, line_chart, pie_chart
@@ -767,13 +791,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         if selected_attribute == 'Shark.common.name':
             pie_chart = update_pie_chart(clicked_category)
+        elif selected_attribute != 'Shark.common.name':
+            pie_chart = update_pie_chart("Default")
         line_chart = go.Figure()
         
         # Plot all clicked categories for line chart
         for category, color in clicked_categories:
+
+            #If the map is focused use the focused data
             if not focused_map_df.empty:
                 temp_data = focused_map_df    
 
+            #If the map is not focused use the original data
             filtered_map_df = temp_data[temp_data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
 
@@ -833,18 +862,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 lon=filtered_map_df['Longitude'],
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=15, color="white"),
-                text=filtered_map_df['Reference'],
+                hoverinfo="none",
                 showlegend=False,
-                # name=category
             ))
             new_fig.add_trace(go.Scattermapbox(
                 lat=filtered_map_df['Latitude'],
                 lon=filtered_map_df['Longitude'],
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=13, color=color),
-                text=filtered_map_df['Reference'],
+                text=focused_map_df[selected_attribute],
                 showlegend=True,
-                name=category
+                name=category,
+                hoverinfo="text",
             ))
 
         new_fig.update_layout(
@@ -879,6 +908,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         # Remove all traces except the initial one
         fig= initial_fig_clustered()
+        line_chart = initial_line_chart()
+        pie_chart = update_pie_chart("Default")
 
         # Reset map to default view
         fig.update_layout(
