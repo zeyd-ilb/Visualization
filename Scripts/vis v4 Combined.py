@@ -25,6 +25,7 @@ bar_colors = []
 focused_map_df = pd.DataFrame()
 once = True
 attribute_changed = False
+was_compare = False
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -622,7 +623,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global focused_map_df 
     global data
     global attribute_changed
-
+    global was_compare
     temp_data = data
 
     ctx = dash.callback_context
@@ -738,16 +739,26 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         # Add the clicked category and its color to the list if compare is checked
         if compare:
-            if (clicked_category, marker_color) in clicked_categories:
-                clicked_categories.remove((clicked_category, marker_color))
-            else:
-                clicked_categories.append((clicked_category, marker_color))
-        else:
-            if (clicked_category, marker_color) in clicked_categories:
+            if not was_compare:
                 clicked_categories = []
+                clicked_categories.append((clicked_category, marker_color))
             else:
-                clicked_categories = [(clicked_category, marker_color)]
-
+                if (clicked_category, marker_color) in clicked_categories :
+                    clicked_categories.remove((clicked_category, marker_color))
+                else:
+                    clicked_categories.append((clicked_category, marker_color))
+            was_compare = True
+        else:
+            if was_compare:
+                clicked_categories = []
+                clicked_categories.append((clicked_category, marker_color))
+            else:
+                if (clicked_category, marker_color) in clicked_categories:
+                    clicked_categories = []
+                else:
+                    clicked_categories = [(clicked_category, marker_color)]
+            was_compare = False
+            
         # If clicked_categories is empty, return the initial figure
         if not clicked_categories:
             return fig, selected_attribute, None, None, line_chart, pie_chart
@@ -823,7 +834,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=15, color="white"),
                 text=filtered_map_df['Reference'],
-                showlegend=False
+                showlegend=False,
+                # name=category
             ))
             new_fig.add_trace(go.Scattermapbox(
                 lat=filtered_map_df['Latitude'],
@@ -831,7 +843,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=13, color=color),
                 text=filtered_map_df['Reference'],
-                showlegend=False
+                showlegend=True,
+                name=category
             ))
 
         new_fig.update_layout(
@@ -841,7 +854,19 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 center={"lat": fig.layout.mapbox.center.lat, "lon": fig.layout.mapbox.center.lon},  # Keep current center
             ),
             margin={"l": 0, "r": 0, "t": 0, "b": 0},
-            dragmode=False
+            legend=dict(
+                    x=0.15,  # Horizontal position (0 to 1)
+                    y=0.9,  # Vertical position (0 to 1)
+                    xanchor='center',  # Anchor the legend horizontally at the center
+                    yanchor='middle',  # Anchor the legend vertically at the middle
+                    bgcolor='rgba(0,0,0,0)',  # Background color of the legend (transparent)
+                    bordercolor='rgba(255,255,255,0.5)',  # Border color of the legend
+                    borderwidth=1,  
+                    font=dict(
+                        color='white'  # Change the text color of the legend
+                    )
+                ),
+            dragmode=False,
         )
         
 
