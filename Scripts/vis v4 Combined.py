@@ -11,11 +11,13 @@ from dash import Input, Output, State
 import seaborn as sns
 import matplotlib.colors as mcolors
 from math import log1p
+from sklearn.neighbors import NearestNeighbors
+
 
 
 # Load the shark attack data
-data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-# data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+# data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
+data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -57,29 +59,42 @@ def location_cluster():
     # CLUSTER LOCATIONS
 
     # Clean the Longitude column by removing trailing periods
-    #data["Longitude"] = data["Longitude"].str.rstrip('.')
+    data["Longitude"] = data["Longitude"].str.rstrip('.')
     data["Longitude"] = [float(x) for x in data["Longitude"]]
 
     # Clean the Latitude column by removing trailing periods
-    #data["Latitude"] = data["Latitude"].str.rstrip('.')
+    data["Latitude"] = data["Latitude"].str.rstrip('.')
     data["Latitude"] = [float(x) for x in data["Latitude"]]
 
     coords = data[["Latitude", "Longitude"]]
     kms_per_radian = 6371.0088
     epsilon = 85/ kms_per_radian
+
     db = DBSCAN(eps=epsilon, min_samples=1, algorithm='ball_tree', metric='haversine').fit(np.radians(coords))
     cluster_labels = db.labels_
     data["Cluster"] = cluster_labels
     
+    # Identify small clusters (outliers)
     outliers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
-    i = outliers[(outliers.Cluster < 4)].index
-        
-    new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
-    new_df.drop(i, inplace=True)
+    small_clusters = outliers[outliers["Cluster"] < 4].index
 
+    # Separate small clusters and larger clusters
+    small_cluster_points = data[data["Cluster"].isin(small_clusters)]
+    large_cluster_points = data[~data["Cluster"].isin(small_clusters)]
+
+    # Find the nearest neighbors in the larger clusters for each point in the small clusters
+    nbrs = NearestNeighbors(n_neighbors=1, algorithm='ball_tree', metric='haversine').fit(np.radians(large_cluster_points[["Latitude", "Longitude"]]))
+    distances, indices = nbrs.kneighbors(np.radians(small_cluster_points[["Latitude", "Longitude"]]))
+
+    # Reassign points from small clusters to the nearest larger cluster
+    for i, idx in enumerate(small_cluster_points.index):
+        nearest_large_cluster_idx = large_cluster_points.iloc[indices[i][0]].name
+        data.at[idx, "Cluster"] = data.at[nearest_large_cluster_idx, "Cluster"]
+
+    # Recalculate cluster medians
+    new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].mean()
+    outliers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
     
-    new_df.rename_axis("Cluster_ID", inplace=True)
-
     cluster_sizes = []
 
     for count in outliers.Cluster:
@@ -96,7 +111,7 @@ def attribute_preprocessing():
     # Fill missing values with a placeholder for better readability and smooth mapping
     data["Injury.severity"] = data["Injury.severity"].fillna("Missing Information")
     data["Shark.common.name"] = data["Shark.common.name"].fillna("Missing Information")
-    data["Location"] = data["Location"].fillna("Missing Information")
+    # data["Location"] = data["Location"].fillna("Missing Information")
     data["Victim.activity"] = data["Victim.activity"].fillna("Missing Information")
 
 attribute_preprocessing()
@@ -221,7 +236,7 @@ def parallel_chart():
     
     # Define the data directly within the file
     data = {
-        "State": ["NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"],
+        "State": ["NSW", "NT", "QLD", "SA", "TAS", "VIC", "WA"], # Created based on the original shark data 
         "Number of Incidents": [449, 19, 372, 81, 28, 71, 213],
         "Population": [8469.6, 254.3, 5560.5, 1873.8, 575.7, 6959.2, 2951.6],
         "Tourism": [3702, 202, 2124, 451, 256, 2489, 819],
@@ -284,6 +299,38 @@ def parallel_chart():
     return line_fig  
 
 line_fig = parallel_chart()
+
+def update_pie_chart(shark_species):
+    global data
+
+    # Filter the data for the selected shark species
+    filtered_data = data[data['Shark.common.name'] == shark_species]
+    
+    # Check if there is any data for the selected shark species
+    if filtered_data.empty:
+        return px.pie(title=f"No data available for {shark_species}")
+
+    # Sample data for the pie chart
+    filtered_map_df = filtered_data["Victim.injury"]
+    filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
+    yearly_counts = filtered_map_df.groupby('Victim.injury').size().reset_index(name='Occurrences')
+
+    # Get the counts for each injury type
+    fatal_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'fatal', 'Occurrences'].values[0] if 'fatal' in yearly_counts['Victim.injury'].values else 0
+    injured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'injured', 'Occurrences'].values[0] if 'injured' in yearly_counts['Victim.injury'].values else 0
+    uninjured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'uninjured', 'Occurrences'].values[0] if 'uninjured' in yearly_counts['Victim.injury'].values else 0
+    
+    pie_data = {
+        "Category": ["Fatal", "Injured", "Uninjured"],
+        "Values": [fatal_count, injured_count, uninjured_count]
+    }
+    
+    pie_df = pd.DataFrame(pie_data)
+
+    fig = px.pie(pie_df,template='plotly_dark', names='Category', values='Values', title='Pie Chart for Shark Species: ' + shark_species)
+    return fig
+
+pie_chart = update_pie_chart("wobbegong")
 
 # Dash app
 app = dash.Dash(__name__)
@@ -396,7 +443,7 @@ app.layout = dmc.MantineProvider(
                                                     span=4,
                                                     children=[
                                                         dmc.Button(
-                                                            "Reset Map", 
+                                                            "Reset Zoom", 
                                                             id="reset_button", 
                                                             n_clicks=0,
                                                             variant="gradient",
@@ -418,6 +465,7 @@ app.layout = dmc.MantineProvider(
                                         dcc.Graph(id='line-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
                                         html.H1("Parallel Coordinate Plot for States"),
                                         dcc.Graph(id="parallel-coordinate-plot", figure=line_fig),
+                                        dcc.Graph(id='pie-chart'),
                                         
                                 ]),
                                 html.Div(id='previous-dropdown-value', style={'display': 'none'}),
@@ -467,7 +515,6 @@ def update_visibility(selected_attribute):
 )
 def update_bar_chart(selected_attribute, filter_option, log_scale):
     global bar_colors
-    global bar_fig
 
     if not selected_attribute:
         return go.Figure()
@@ -534,7 +581,8 @@ def update_bar_chart(selected_attribute, filter_option, log_scale):
      Output("previous-dropdown-value", "children"),
      Output('bar-chart', 'clickData'),
      Output('shark-map', 'clickData'),
-     Output('line-chart', 'figure')],
+     Output('line-chart', 'figure'),
+     Output('pie-chart', 'figure')],
     [Input("bar-chart", "clickData"),
      Input("dropdown-axis-bar", "value"),
      Input("shark-map", "clickData"), 
@@ -547,14 +595,13 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global fig
     global line_chart
     global once
-    global merged_df
-    global basic_df
+    global pie_chart
 
     ctx = dash.callback_context
 
     # If no attribute is selected, return the initial state
     if selected_attribute is None: 
-        return fig, None, None, None, line_chart  
+        return fig, None, None, None, line_chart, pie_chart
     if once:
         fig = initial_fig_clustered()
         once = False    
@@ -567,7 +614,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # If no triggered inputs, return the initial state
     if not ctx.triggered:
-        return fig, selected_attribute, None, None, line_chart
+        return fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Determine which input triggered the callback
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -591,6 +638,11 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         clicked_categories = []
         # fig.data = []
 
+        # Check current zoom level to determine if bar chart interaction is allowed
+        current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
+        if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
+            return fig, selected_attribute, None, None, line_chart, pie_chart
+
         # Recolor the shark points based on the new attribute
         fig.add_trace(go.Scattermapbox(
             lat=data["Latitude"],
@@ -600,7 +652,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             customdata=data.index,  # Pass row indices as custom data
         ))
 
-        return fig, selected_attribute, None, None, line_chart
+        return fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Handle map marker click for zooming into a location
     if triggered_id == "shark-map" and map_click_data:
@@ -609,14 +661,11 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
-        lat_new_df = new_df[new_df["Latitude"] == lat]
-        merged_df = data.merge(lat_new_df, on="Cluster", suffixes=("_data", "_new_df"))
-
         fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
-            lat=merged_df["Latitude_data"],
-            lon=merged_df["Longitude_data"],
+            lat=data["Latitude"],
+            lon=data["Longitude"],
             mode="markers",
             marker=dict(size=15, color= data[color_column]),
             text=data[selected_attribute],  # Hover text
@@ -627,12 +676,12 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         fig.update_layout(
             mapbox=dict(
                 center={"lat": lat, "lon": lon},  # Center on clicked marker
-                zoom=8  # Zoom level
+                zoom=7  # Zoom level
             ),
             showlegend=False,
             dragmode=False
         )
-        return fig, selected_attribute, None, None, line_chart
+        return fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Handle bar-chart click for filtering map points
     elif triggered_id == "bar-chart" and bar_click_data:
@@ -655,19 +704,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         # If clicked_categories is empty, return the initial figure
         if not clicked_categories:
-            return fig, selected_attribute, None, None, line_chart
+            return fig, selected_attribute, None, None, line_chart, pie_chart
     
         selected_attribute_renamed = attribute_rename(selected_attribute)[0]
-
+        
+        if selected_attribute == 'Shark.common.name':
+            pie_chart = update_pie_chart(clicked_category)
         line_chart = go.Figure()
         
         # Plot all clicked categories
         for category, color in clicked_categories:
-            filtered_map_df = merged_df[merged_df[selected_attribute] == category]
+            filtered_map_df = data[data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
-            basic_map = data[data[selected_attribute] == category]
-            basic_df = basic_map.groupby('Incident.year').size().reset_index(name='Occurrences')
-
 
             line_chart.add_trace(go.Scatter(
                 x=yearly_counts['Incident.year'],
@@ -704,22 +752,21 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
-        if current_zoom < 8:  # If zoom level is less than 8, ignore bar chart interactions
-            return fig, selected_attribute, None, None, line_chart
+        if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
+            return fig, selected_attribute, None, None, line_chart, pie_chart
 
         new_fig = go.Figure()
         
         # Plot all clicked categories
         for category, color in clicked_categories:
-            filtered_map_df = merged_df[merged_df[selected_attribute] == category]
-            yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
-
+            filtered_map_df = data[data[selected_attribute] == category]
+            
             new_fig.add_trace(go.Scattermapbox(
-                lat=filtered_map_df['Latitude_data'],
-                lon=filtered_map_df['Longitude_data'],
+                lat=filtered_map_df['Latitude'],
+                lon=filtered_map_df['Longitude'],
                 mode='markers',
                 marker=go.scattermapbox.Marker(size=15, color=color),
-                text=filtered_map_df[selected_attribute],
+                text=filtered_map_df['Reference'],
                 showlegend=False
             ))
 
@@ -734,7 +781,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         )
         
 
-        return new_fig, selected_attribute, None, None, line_chart
+        return new_fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
@@ -750,10 +797,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             ),
             dragmode=False
         )
-        return fig, selected_attribute , None, None, line_chart
+        return fig, selected_attribute , None, None, line_chart, pie_chart
 
     # Default return
-    return fig, selected_attribute, None, None, line_chart
+    return fig, selected_attribute, None, None, line_chart, pie_chart
 
 
 
