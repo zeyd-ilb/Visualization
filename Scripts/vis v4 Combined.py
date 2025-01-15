@@ -19,6 +19,12 @@ from sklearn.neighbors import NearestNeighbors
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
 
+# Global variables
+clicked_categories = []
+bar_colors = []
+focused_map_df = pd.DataFrame()
+once = True
+
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
 # geojson_data = requests.get(geojson_url).json()
@@ -37,7 +43,7 @@ def create_initial_fig_all():
         marker=dict(size=8, color="red"),
         text=data["Shark.common.name"],  # Hover text
         hoverinfo="text",  # Text displayed on hover
-        customdata=data.index,  # Pass row indices as custom data
+        customdata=new_df.index,  # Pass row indices as custom data
     ))
 
     # Final map settings for the initial figure
@@ -92,11 +98,10 @@ def location_cluster():
         data.at[idx, "Cluster"] = data.at[nearest_large_cluster_idx, "Cluster"]
 
     # Recalculate cluster medians
-    new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].mean()
+    new_df = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].median()
     outliers = data.groupby("Cluster")[["Cluster","Latitude", "Longitude"]].count()
     
     cluster_sizes = []
-
     for count in outliers.Cluster:
         if count >= 4:
             cluster_sizes.append(count)
@@ -138,7 +143,6 @@ def color_coding(attribute):
 
     return color_map
 
-once = True
 def annotation_shape():
     # Add an annotation
     fig.add_annotation(
@@ -176,7 +180,7 @@ def initial_fig_clustered():
         textfont=dict(color='white'),
         hovertext="Please select an attribute first",  # Text displayed on hover
         hoverinfo="text",  # Text displayed on hover
-        customdata=data.index,  # Pass row indices as custom data
+        customdata=new_df.index,  # Pass row indices as custom data
     ))
 
     # Final map settings
@@ -435,7 +439,7 @@ app.layout = dmc.MantineProvider(
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch_comparison",
-                                                            label="Select Multiple",
+                                                            label="Select Multiple Bars",
                                                         ),
                                                     ],
                                                 ),
@@ -443,7 +447,7 @@ app.layout = dmc.MantineProvider(
                                                     span=4,
                                                     children=[
                                                         dmc.Button(
-                                                            "Reset Zoom", 
+                                                            "Reset Map", 
                                                             id="reset_button", 
                                                             n_clicks=0,
                                                             variant="gradient",
@@ -494,9 +498,7 @@ app.layout = dmc.MantineProvider(
 )
 
 
-# Global variable to store clicked categories and their colors
-clicked_categories = []
-bar_colors = []
+
 
 @app.callback(
     Output('bar-chart-container', 'style'),
@@ -596,6 +598,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global line_chart
     global once
     global pie_chart
+    global focused_map_df 
 
     ctx = dash.callback_context
 
@@ -661,15 +664,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
+        cluster_id = map_click_data["points"][0]["customdata"]
+        focused_map_df = data[data["Cluster"] == cluster_id]
+
         fig.data = []
         # Add trace for all points (if needed)
         fig.add_trace(go.Scattermapbox(
-            lat=data["Latitude"],
-            lon=data["Longitude"],
+            lat=focused_map_df["Latitude"],
+            lon=focused_map_df["Longitude"],
             mode="markers",
-            marker=dict(size=15, color= data[color_column]),
-            text=data[selected_attribute],  # Hover text
-            customdata=data.index,  # Pass row indices as custom data
+            marker=dict(size=15, color= focused_map_df[color_column]),
+            text=focused_map_df[selected_attribute],  # Hover text
         ))
         
         # Update map layout to zoom into the clicked point
@@ -712,7 +717,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             pie_chart = update_pie_chart(clicked_category)
         line_chart = go.Figure()
         
-        # Plot all clicked categories
+        # Plot all clicked categories for line chart
         for category, color in clicked_categories:
             filtered_map_df = data[data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
@@ -750,7 +755,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             )
         )
 
-        # Check current zoom level to determine if bar chart interaction is allowed
+        # Check current zoom level to determine if bar chart interaction is allowed with shark map
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
             return fig, selected_attribute, None, None, line_chart, pie_chart
@@ -759,7 +764,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         # Plot all clicked categories
         for category, color in clicked_categories:
-            filtered_map_df = data[data[selected_attribute] == category]
+            filtered_map_df = focused_map_df[focused_map_df[selected_attribute] == category]
             
             new_fig.add_trace(go.Scattermapbox(
                 lat=filtered_map_df['Latitude'],
