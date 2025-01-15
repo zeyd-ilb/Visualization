@@ -24,6 +24,7 @@ clicked_categories = []
 bar_colors = []
 focused_map_df = pd.DataFrame()
 once = True
+attribute_changed = False
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -513,16 +514,36 @@ def update_visibility(selected_attribute):
 # Callback to update the bar chart 
 @app.callback(
     Output('bar-chart', 'figure'),
-    [Input('dropdown-axis-bar', 'value'), Input('filter-options-bar', 'value'),Input("switch_log_scale", "checked")]
+    [Input('dropdown-axis-bar', 'value'),
+    Input('filter-options-bar', 'value'),
+    Input("switch_log_scale", "checked"),
+    Input('shark-map', 'clickData'),
+    Input("reset_button", "n_clicks")]
 )
-def update_bar_chart(selected_attribute, filter_option, log_scale):
+def update_bar_chart(selected_attribute, filter_option, log_scale, map_click_data, reset_clicks):
     global bar_colors
+    global focused_map_df
+    global data
+    global attribute_changed
+    temp_data = data
+
+    # # Determine which input triggered the callback
+    # ctx = dash.callback_context
+    # triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     if not selected_attribute:
-        return go.Figure()
+        return go.Figure() 
+
+    if not focused_map_df.empty:
+        temp_data = focused_map_df    
     
+    # Reset if the attribute changes or no data
+    if attribute_changed:
+        temp_data = data   
+        attribute_changed = False 
+
     # Count occurrences of each unique value in the selected attribute
-    counts = data[selected_attribute].value_counts(dropna=False).reset_index()
+    counts = temp_data[selected_attribute].value_counts(dropna=False).reset_index()
     counts.columns = [selected_attribute, 'Occurrences']
 
     # Update the selected_attribute if it is one of the renamed columns
@@ -599,6 +620,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global once
     global pie_chart
     global focused_map_df 
+    global data
+    global attribute_changed
+
+    temp_data = data
 
     ctx = dash.callback_context
 
@@ -639,21 +664,22 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     # Reset if the attribute changes or no data
     if selected_attribute != previous_attribute:
         clicked_categories = []
-        # fig.data = []
+        attribute_changed = True
 
         # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
             return fig, selected_attribute, None, None, line_chart, pie_chart
 
-        # Recolor the shark points based on the new attribute
-        fig.add_trace(go.Scattermapbox(
-            lat=data["Latitude"],
-            lon=data["Longitude"],
-            marker=dict(size=15, color= data[color_column]),
-            text=data[selected_attribute],  # Hover text
-            customdata=data.index,  # Pass row indices as custom data
-        ))
+        fig = initial_fig_clustered()
+        # # Recolor the shark points based on the new attribute
+        # fig.add_trace(go.Scattermapbox(
+        #     lat=data["Latitude"],
+        #     lon=data["Longitude"],
+        #     marker=dict(size=15, color= data[color_column]),
+        #     text=data[selected_attribute],  # Hover text
+        #     customdata=data.index,  # Pass row indices as custom data
+        # ))
 
         return fig, selected_attribute, None, None, line_chart, pie_chart
 
@@ -664,8 +690,14 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         lat = map_click_data["points"][0]["lat"]
         lon = map_click_data["points"][0]["lon"]
 
-        cluster_id = map_click_data["points"][0]["customdata"]
-        focused_map_df = data[data["Cluster"] == cluster_id]
+        # Check current zoom level to determine if bar chart interaction is allowed with shark map
+        current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
+        if current_zoom > 3.5: 
+            nothing = True
+        else:
+            cluster_id = map_click_data["points"][0]["customdata"] # buraya dikkat
+            focused_map_df = data[data["Cluster"] == cluster_id]
+
 
         fig.data = []
         # Add trace for all points (if needed)
@@ -673,8 +705,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             lat=focused_map_df["Latitude"],
             lon=focused_map_df["Longitude"],
             mode="markers",
-            marker=dict(size=15, color= focused_map_df[color_column]),
+            marker=dict(size=15, color= "white"),
             text=focused_map_df[selected_attribute],  # Hover text
+            hoverinfo='text'
+        ))
+        fig.add_trace(go.Scattermapbox(
+            lat=focused_map_df["Latitude"],
+            lon=focused_map_df["Longitude"],
+            mode="markers",
+            marker=dict(size=13, color= focused_map_df[color_column]),
+            text=focused_map_df[selected_attribute],  # Hover text
+            hoverinfo='text'
         ))
         
         # Update map layout to zoom into the clicked point
@@ -719,8 +760,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         # Plot all clicked categories for line chart
         for category, color in clicked_categories:
-            filtered_map_df = data[data[selected_attribute] == category]
+            if not focused_map_df.empty:
+                temp_data = focused_map_df    
+
+            filtered_map_df = temp_data[temp_data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+
+            # Determine the range of years from the data
+            start_year = yearly_counts['Incident.year'].min()
+            end_year = yearly_counts['Incident.year'].max()
+            all_years = pd.DataFrame({'Incident.year': range(start_year, end_year + 1)})
+
+            yearly_counts = all_years.merge(yearly_counts, on='Incident.year', how='left').fillna(0)
 
             line_chart.add_trace(go.Scatter(
                 x=yearly_counts['Incident.year'],
@@ -770,7 +821,15 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 lat=filtered_map_df['Latitude'],
                 lon=filtered_map_df['Longitude'],
                 mode='markers',
-                marker=go.scattermapbox.Marker(size=15, color=color),
+                marker=go.scattermapbox.Marker(size=15, color="white"),
+                text=filtered_map_df['Reference'],
+                showlegend=False
+            ))
+            new_fig.add_trace(go.Scattermapbox(
+                lat=filtered_map_df['Latitude'],
+                lon=filtered_map_df['Longitude'],
+                mode='markers',
+                marker=go.scattermapbox.Marker(size=13, color=color),
                 text=filtered_map_df['Reference'],
                 showlegend=False
             ))
@@ -790,6 +849,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
+        
+        focused_map_df = pd.DataFrame()
         
         # Remove all traces except the initial one
         fig= initial_fig_clustered()
