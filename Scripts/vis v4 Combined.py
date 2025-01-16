@@ -427,6 +427,7 @@ app.layout = dmc.MantineProvider(
                                     ],
                                     value=None,  # Default value
                                     clearable=False,
+                                    searchable= False,
                                     style={
                                         'marginTop': '5px',
                                         'marginBottom': '20px',
@@ -813,8 +814,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
 
             # Determine the range of years from the data
-            start_year = yearly_counts['Incident.year'].min()
-            end_year = yearly_counts['Incident.year'].max()
+            start_year = int(yearly_counts['Incident.year'].min())
+            end_year = int(yearly_counts['Incident.year'].max())
             all_years = pd.DataFrame({'Incident.year': range(start_year, end_year + 1)})
 
             yearly_counts = all_years.merge(yearly_counts, on='Incident.year', how='left').fillna(0)
