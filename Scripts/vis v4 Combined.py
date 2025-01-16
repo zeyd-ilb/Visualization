@@ -10,9 +10,10 @@ import numpy as np
 from dash import Input, Output, State
 import seaborn as sns
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 from math import log1p
 from sklearn.neighbors import NearestNeighbors
-
+import distinctipy
 
 
 # Load the shark attack data
@@ -26,6 +27,9 @@ focused_map_df = pd.DataFrame()
 once = True
 attribute_changed = False
 was_compare = False
+
+colors = distinctipy.get_colors(27)  
+colors = colors[2:] 
 
 # Load a GeoJSON file with only Australia boundaries
 # geojson_url = "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson"
@@ -126,25 +130,24 @@ attribute_preprocessing()
 def color_coding(attribute):
     # COLOR BY TYPE
     if attribute == "Injury.severity":
-        injury_types = data[attribute] .unique()
-        color_palette = sns.color_palette("Set1", len(injury_types))  # Use seaborn color palette\
-        color_map = {injury_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(injury_types))}
-        data["Injury.color"] = data[attribute] .map(color_map)
+        shark_types = data[attribute].unique()
+        colors[:len(shark_types)]
+        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
+        data["Injury.color"] = data[attribute].map(color_map)
 
     if attribute == "Shark.common.name":
         shark_types = data[attribute].unique()
-        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        colors[:len(shark_types)]
+        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
         data["Shark.color"] = data[attribute].map(color_map)
 
     if attribute == "Victim.activity":
         shark_types = data[attribute].unique()
-        color_palette = sns.color_palette("Set1", len(shark_types))  # Use seaborn color palette\
-        color_map = {shark_types[i]: mcolors.to_hex(color_palette[i]) for i in range(len(shark_types))}
+        colors[:len(shark_types)]
+        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
         data["Victim.color"] = data[attribute].map(color_map)
-
+    
     return color_map
-
 def annotation_shape():
     # Add an annotation
     fig.add_annotation(
@@ -167,8 +170,11 @@ def annotation_shape():
     fig.add_trace(go.Scattermapbox(
         lat=new_df['Latitude'],  # Ensure you have latitude data
         lon=new_df['Longitude'],  # Ensure you have longitude data
-        mode='markers',
-        marker=go.scattermapbox.Marker(size=15, color='blue'),
+        mode='markers+text',
+        marker=dict(size=20, color='blue'),
+        text=cluster_sizes,  # Hover text
+        textposition="middle center",  # Position of the text relative to the markers
+        textfont=dict(color='white'),
         hovertext="Please Select an Attribute First",  # Link hovertext to the data
         hoverinfo='text',  # Show hover text
 
