@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from math import log1p
 from sklearn.neighbors import NearestNeighbors
 import distinctipy
+from plotly.subplots import make_subplots
 
 
 # Load the shark attack data
@@ -321,14 +322,11 @@ def parallel_chart():
 
 line_fig = parallel_chart()
 
-def update_pie_chart(shark_species):
+def update_pie_chart(shark_species_list):
     global data
 
-    # Filter the data for the selected shark species
-    filtered_data = data[data['Shark.common.name'] == shark_species]
-    
     # Check if there is any data for the selected shark species
-    if shark_species == "Default":
+    if  "Default" in shark_species_list:
         pie_chart = px.pie(template='plotly_dark')
         pie_chart.add_annotation(
             text="Please select a shark species to see the fatality rate",
@@ -344,30 +342,48 @@ def update_pie_chart(shark_species):
     
         return pie_chart
     
-    elif filtered_data.empty:
-        return px.pie(title=f"No data available for {shark_species}")
-    
-    # Sample data for the pie chart
-    filtered_map_df = filtered_data["Victim.injury"]
-    filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
-    yearly_counts = filtered_map_df.groupby('Victim.injury').size().reset_index(name='Occurrences')
+    # Create subplots
+    num_sharks = len(shark_species_list)
+    num_col = 2
+    num_row = (num_sharks // num_col) + (num_sharks % num_col > 0)
 
-    # Get the counts for each injury type
-    fatal_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'fatal', 'Occurrences'].values[0] if 'fatal' in yearly_counts['Victim.injury'].values else 0
-    injured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'injured', 'Occurrences'].values[0] if 'injured' in yearly_counts['Victim.injury'].values else 0
-    uninjured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'uninjured', 'Occurrences'].values[0] if 'uninjured' in yearly_counts['Victim.injury'].values else 0
+    fig = make_subplots(rows=num_row, cols=num_col, specs=[[{'type': 'domain'}] * num_col] * num_row,
+                        subplot_titles=shark_species_list)
     
-    pie_data = {
-        "Category": ["Fatal", "Injured", "Uninjured"],
-        "Values": [fatal_count, injured_count, uninjured_count]
-    }
-    
-    pie_df = pd.DataFrame(pie_data)
+    for i, shark in enumerate(shark_species_list):
+        # Filter the data for the selected shark species
+        filtered_data = data[data['Shark.common.name'] == shark]
+        
+        row = (i // num_col) + 1
+        col = (i % num_col) + 1
+            
+        if filtered_data.empty:
+            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=shark), row=row, col=col)
+            continue
+        
+        # Sample data for the pie chart
+        filtered_map_df = filtered_data["Victim.injury"]
+        filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
+        yearly_counts = filtered_map_df.groupby('Victim.injury').size().reset_index(name='Occurrences')
 
-    fig = px.pie(pie_df,template='plotly_dark', names='Category', values='Values', title='Fatality Rate for Shark Species: ' + shark_species)
+        # Get the counts for each injury type
+        fatal_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'fatal', 'Occurrences'].values[0] if 'fatal' in yearly_counts['Victim.injury'].values else 0
+        injured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'injured', 'Occurrences'].values[0] if 'injured' in yearly_counts['Victim.injury'].values else 0
+        uninjured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'uninjured', 'Occurrences'].values[0] if 'uninjured' in yearly_counts['Victim.injury'].values else 0
+        
+        pie_data = {
+            "Category": ["Fatal", "Injured", "Uninjured"],
+            "Values": [fatal_count, injured_count, uninjured_count]
+        }
+        
+        pie_df = pd.DataFrame(pie_data)
+
+        fig.add_trace(go.Pie(labels=pie_df['Category'], values=pie_df['Values'], name=shark), row=row, col=col)    
+
+    fig.update_layout(template='plotly_dark', title_text="Fatality Rate for Selected Shark Species")
     return fig
 
-pie_chart = update_pie_chart("Default")
+pie_chart = update_pie_chart(["Default"])
 
 # Dash app
 app = dash.Dash(__name__)
@@ -531,9 +547,6 @@ app.layout = dmc.MantineProvider(
     ],
 )
 
-
-
-
 @app.callback(
     Output('bar-chart-container', 'style'),
     Input('dropdown-axis-bar', 'value')
@@ -542,7 +555,6 @@ def update_visibility(selected_attribute):
     if selected_attribute:
         return {'display': 'block'}  # Show the division
     return {'display': 'none'}  # Hide the division
-
 
 # Callback to update the bar chart 
 @app.callback(
@@ -797,9 +809,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         selected_attribute_renamed = attribute_rename(selected_attribute)[0]
         
         if selected_attribute == 'Shark.common.name':
-            pie_chart = update_pie_chart(clicked_category)
+            shark_species_list = [category for category, color in clicked_categories]
+            pie_chart = update_pie_chart(shark_species_list)
         elif selected_attribute != 'Shark.common.name':
-            pie_chart = update_pie_chart("Default")
+            pie_chart = update_pie_chart(["Default"])
         line_chart = go.Figure()
         
         # Plot all clicked categories for line chart
@@ -916,7 +929,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Remove all traces except the initial one
         fig= initial_fig_clustered()
         line_chart = initial_line_chart()
-        pie_chart = update_pie_chart("Default")
+        pie_chart = update_pie_chart(["Default"])
 
         # Reset map to default view
         fig.update_layout(
