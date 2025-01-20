@@ -19,7 +19,7 @@ from plotly.subplots import make_subplots
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
+data = pd.read_csv('Scripts\Australian Shark-Incident Database Public Version.csv')
 
 # Global variables
 clicked_categories = []
@@ -345,22 +345,30 @@ def update_pie_chart(shark_species_list):
     # Create subplots
     num_sharks = len(shark_species_list)
     num_col = 2
-    num_row = (num_sharks // num_col) + (num_sharks % num_col > 0)
+    num_row = num_sharks
+    
+    # Create subplot titles
+    subplot_titles = []
+    for shark in shark_species_list:
+        subplot_titles.append(f"{shark} - Injuries")
+        subplot_titles.append(f"{shark} - Provocation Rate")
 
-    fig = make_subplots(rows=num_row, cols=num_col, specs=[[{'type': 'domain'}] * num_col] * num_row,
-                        subplot_titles=shark_species_list)
+    fig = make_subplots(rows=num_row, cols=num_col, specs=[[{'type': 'domain'}, {'type': 'domain'}]] * num_row,
+                    subplot_titles=subplot_titles)
     
     for i, shark in enumerate(shark_species_list):
         # Filter the data for the selected shark species
         filtered_data = data[data['Shark.common.name'] == shark]
         
-        row = (i // num_col) + 1
-        col = (i % num_col) + 1
+        row = i + 1
+        col_injury = 1
+        col_provoked = 2
             
         if filtered_data.empty:
-            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=shark), row=row, col=col)
-            continue
-        
+            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=f"{shark} - Injuries"), row=row, col=col_injury)
+            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
+            continue    
+
         # Sample data for the pie chart
         filtered_map_df = filtered_data["Victim.injury"]
         filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
@@ -371,16 +379,32 @@ def update_pie_chart(shark_species_list):
         injured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'injured', 'Occurrences'].values[0] if 'injured' in yearly_counts['Victim.injury'].values else 0
         uninjured_count = yearly_counts.loc[yearly_counts['Victim.injury'] == 'uninjured', 'Occurrences'].values[0] if 'uninjured' in yearly_counts['Victim.injury'].values else 0
         
-        pie_data = {
+        pie_data_injury = {
             "Category": ["Fatal", "Injured", "Uninjured"],
             "Values": [fatal_count, injured_count, uninjured_count]
         }
         
-        pie_df = pd.DataFrame(pie_data)
+        pie_df_injury = pd.DataFrame(pie_data_injury)
 
-        fig.add_trace(go.Pie(labels=pie_df['Category'], values=pie_df['Values'], name=shark), row=row, col=col)    
+        fig.add_trace(go.Pie(labels=pie_df_injury['Category'], values=pie_df_injury['Values'], name=f"{shark} - Injuries"), row=row, col=col_injury)
 
-    fig.update_layout(template='plotly_dark', title_text="Fatality Rate for Selected Shark Species")
+        # Sample data for the provoked/unprovoked pie chart
+        provoked_counts = filtered_data["Provoked/unprovoked"].value_counts().reset_index()
+        provoked_counts.columns = ["Category", "Values"]
+        
+        fig.add_trace(go.Pie(labels=provoked_counts['Category'], values=provoked_counts['Values'], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
+    
+    # Adjust the title font size based on the number of shark types
+    title_font_size = 20 if num_sharks <= 2 else 12
+
+    fig.update_layout(template='plotly_dark', title_text="Fatality and Provocation Rates for Selected Shark Species",
+                      title_font_size=title_font_size)
+    
+    # Adjust the space (margin) between the subplot title and the plot
+    for i in range(1, num_row + 1):
+        fig.update_yaxes(title_standoff=20, row=i, col=1)
+        fig.update_yaxes(title_standoff=20, row=i, col=2)
+    
     return fig
 
 pie_chart = update_pie_chart(["Default"])
@@ -419,7 +443,7 @@ app.layout = dmc.MantineProvider(
                             },
                             children=[
                                 # Left COLUMN
-                                html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff"}),  # Light text color
+                                html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff", "textAlign": "center"}),  # Light text color
                                 html.Label("Select Attribute for Bar Chart:", style={'color': '#fff'}),  # Light text color
                                 dcc.Dropdown(
                                     id='dropdown-axis-bar',
@@ -717,14 +741,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             return fig, selected_attribute, None, None, line_chart, pie_chart
 
         fig = initial_fig_clustered()
-        # # Recolor the shark points based on the new attribute
-        # fig.add_trace(go.Scattermapbox(
-        #     lat=data["Latitude"],
-        #     lon=data["Longitude"],
-        #     marker=dict(size=15, color= data[color_column]),
-        #     text=data[selected_attribute],  # Hover text
-        #     customdata=data.index,  # Pass row indices as custom data
-        # ))
 
         return fig, selected_attribute, None, None, line_chart, pie_chart
 
@@ -930,6 +946,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         fig= initial_fig_clustered()
         line_chart = initial_line_chart()
         pie_chart = update_pie_chart(["Default"])
+        clicked_categories = []
 
         # Reset map to default view
         fig.update_layout(
