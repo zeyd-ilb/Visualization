@@ -15,6 +15,8 @@ from math import log1p
 from sklearn.neighbors import NearestNeighbors
 import distinctipy
 from plotly.subplots import make_subplots
+from sklearn.preprocessing import MinMaxScaler
+
 
 
 # Load the shark attack data
@@ -168,20 +170,13 @@ def annotation_shape():
         fillcolor="LightSkyBlue",
         opacity=0.5
     )
-    fig.add_trace(go.Scattermapbox(
-        lat=new_df['Latitude'],  # Ensure you have latitude data
-        lon=new_df['Longitude'],  # Ensure you have longitude data
-        mode='markers+text',
-        marker=dict(size=20, color='blue'),
-        text=cluster_sizes,  # Hover text
-        textposition="middle center",  # Position of the text relative to the markers
-        textfont=dict(color='white'),
-        hovertext="Please Select an Attribute First",  # Link hovertext to the data
-        hoverinfo='text',  # Show hover text
-
-    ))
 
     return fig
+
+# Normalize the cluster sizes
+cluster_sizes_array = np.array(cluster_sizes)
+scaler = MinMaxScaler()
+normalized_cluster_sizes = scaler.fit_transform(cluster_sizes_array.reshape(-1, 1)).flatten()
 
 def initial_fig_clustered():
     # Create the base map
@@ -192,7 +187,18 @@ def initial_fig_clustered():
         lat=new_df["Latitude"],
         lon=new_df["Longitude"],
         mode="markers+text",
-        marker=dict(size=20, color='blue'),
+        marker=dict(
+            size=cluster_sizes,  # Set marker size based on cluster_sizes
+            sizemode='area',  # Use area to scale the size
+            sizeref=0.08,  # Adjust sizeref to scale the markers properly
+            sizemin=4,  # Minimum size of the marker
+            color=normalized_cluster_sizes,  # Set marker color based on cluster_sizes
+            colorscale=[(0, "blue"), (0.5, "yellow"), (1, "red")],  # Use a cyclical color scale
+            colorbar=dict(title="Cluster Size"),  # Add a color bar with a title
+            opacity=1,
+            showscale=False
+
+        ),
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
         textfont=dict(color='white'),
@@ -706,7 +712,17 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Update the hover text
         fig.update_traces(go.Scattermapbox(
             hovertext="Click on to zoom",  # Text displayed on hover
-            marker=dict(size=20, color='#5506d6'),
+            marker=dict(
+                size=cluster_sizes,  # Set marker size based on cluster_sizes
+                sizemode='area',  # Use area to scale the size
+                sizeref=0.08,  # Adjust sizeref to scale the markers properly
+                sizemin=4,  # Minimum size of the marker
+                color=normalized_cluster_sizes,  # Set marker color based on cluster_sizes
+                colorscale=[(0, "blue"), (0.5, "yellow"), (1, "red")],  # Use a cyclical color scale
+                colorbar=dict(title="Cluster Size"),  # Add a color bar with a title
+                opacity=1,
+                showscale=False,
+            ),
         ))
 
     # If no triggered inputs, return the initial state
