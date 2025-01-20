@@ -19,7 +19,7 @@ from plotly.subplots import make_subplots
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
-data = pd.read_csv("C:\\Users\\20223070\\Downloads\\sharks.csv")
+data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 
 # Global variables
 clicked_categories = []
@@ -72,11 +72,11 @@ def location_cluster():
     # CLUSTER LOCATIONS
 
     # Clean the Longitude column by removing trailing periods
-    data["Longitude"] = data["Longitude"].str.rstrip('.')
+    #data["Longitude"] = data["Longitude"].str.rstrip('.')
     data["Longitude"] = [float(x) for x in data["Longitude"]]
 
     # Clean the Latitude column by removing trailing periods
-    data["Latitude"] = data["Latitude"].str.rstrip('.')
+    #data["Latitude"] = data["Latitude"].str.rstrip('.')
     data["Latitude"] = [float(x) for x in data["Latitude"]]
 
     coords = data[["Latitude", "Longitude"]]
