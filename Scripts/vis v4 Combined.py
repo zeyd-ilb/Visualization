@@ -16,11 +16,10 @@ from sklearn.neighbors import NearestNeighbors
 import distinctipy
 from plotly.subplots import make_subplots
 from sklearn.preprocessing import MinMaxScaler
-
-
+from plotly.subplots import make_subplots
+from sklearn.preprocessing import MinMaxScaler
 
 # Load the shark attack data
-# data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
 data = pd.read_csv('Scripts\Australian Shark-Incident Database Public Version.csv')
 
 # Global variables
@@ -193,7 +192,7 @@ def initial_fig_clustered():
             sizeref=0.08,  # Adjust sizeref to scale the markers properly
             sizemin=4,  # Minimum size of the marker
             color=normalized_cluster_sizes,  # Set marker color based on cluster_sizes
-            colorscale=[(0, "blue"), (0.5, "yellow"), (1, "red")],  # Use a cyclical color scale
+            colorscale=[(0, "yellow"), (0.025, "orange"), (1, "red")],  # Use a cyclical color scale
             colorbar=dict(title="Cluster Size"),  # Add a color bar with a title
             opacity=1,
             showscale=False
@@ -201,7 +200,7 @@ def initial_fig_clustered():
         ),
         text=cluster_sizes,  # Hover text
         textposition="middle center",  # Position of the text relative to the markers
-        textfont=dict(color='white'),
+        textfont=dict(color='black'),
         hovertext="Click to zoom",  # Text displayed on hover
         hoverinfo="text",  # Text displayed on hover
         customdata=new_df.index,  # Pass row indices as custom data
@@ -328,7 +327,7 @@ def parallel_chart():
 
 line_fig = parallel_chart()
 
-def update_pie_chart(shark_species_list):
+def update_pie_chart(shark_species_list, selected):
     global data
 
     # Check if there is any data for the selected shark species
@@ -395,7 +394,8 @@ def update_pie_chart(shark_species_list):
         fig.add_trace(go.Pie(labels=pie_df_injury['Category'], values=pie_df_injury['Values'], name=f"{shark} - Injuries"), row=row, col=col_injury)
 
         # Sample data for the provoked/unprovoked pie chart
-        provoked_counts = filtered_data["Provoked/unprovoked"].value_counts().reset_index()
+        fatality_data = filtered_data[filtered_data["Victim.injury"].isin(selected)]
+        provoked_counts = fatality_data["Provoked/unprovoked"].value_counts().reset_index()
         provoked_counts.columns = ["Category", "Values"]
         
         fig.add_trace(go.Pie(labels=provoked_counts['Category'], values=provoked_counts['Values'], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
@@ -406,14 +406,9 @@ def update_pie_chart(shark_species_list):
     fig.update_layout(template='plotly_dark', title_text="Fatality and Provocation Rates for Selected Shark Species",
                       title_font_size=title_font_size)
     
-    # Adjust the space (margin) between the subplot title and the plot
-    for i in range(1, num_row + 1):
-        fig.update_yaxes(title_standoff=20, row=i, col=1)
-        fig.update_yaxes(title_standoff=20, row=i, col=2)
-    
     return fig
 
-pie_chart = update_pie_chart(["Default"])
+pie_chart = update_pie_chart(["Default"], None)
 
 # Dash app
 app = dash.Dash(__name__)
@@ -685,10 +680,11 @@ def update_bar_chart(selected_attribute, filter_option, log_scale, map_click_dat
      Input("dropdown-axis-bar", "value"),
      Input("shark-map", "clickData"), 
      Input('switch_comparison', 'checked'),
+     Input("pie-chart", "clickData"),
      Input("reset_button", "n_clicks")],
     [State("previous-dropdown-value", "children")]
 )
-def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, reset_clicks, previous_attribute):
+def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, pie_click_data, reset_clicks, previous_attribute):
     global clicked_categories
     global fig
     global line_chart
@@ -697,6 +693,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     global focused_map_df 
     global data
     global attribute_changed
+    global shark_species_list
     global was_compare
     temp_data = data
 
@@ -718,7 +715,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 sizeref=0.08,  # Adjust sizeref to scale the markers properly
                 sizemin=4,  # Minimum size of the marker
                 color=normalized_cluster_sizes,  # Set marker color based on cluster_sizes
-                colorscale=[(0, "blue"), (0.5, "yellow"), (1, "red")],  # Use a cyclical color scale
+                colorscale=[(0, "yellow"), (0.025, "orange"), (1, "red")],  # Use a cyclical color scale
                 colorbar=dict(title="Cluster Size"),  # Add a color bar with a title
                 opacity=1,
                 showscale=False,
@@ -842,9 +839,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         
         if selected_attribute == 'Shark.common.name':
             shark_species_list = [category for category, color in clicked_categories]
-            pie_chart = update_pie_chart(shark_species_list)
+            pie_chart = update_pie_chart(shark_species_list, ["fatal", "injured", "uninjured"])
+                
         elif selected_attribute != 'Shark.common.name':
-            pie_chart = update_pie_chart(["Default"])
+            pie_chart = update_pie_chart(["Default"], None)
         line_chart = go.Figure()
         
         # Plot all clicked categories for line chart
@@ -953,6 +951,19 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         return new_fig, selected_attribute, None, None, line_chart, pie_chart
 
+    elif triggered_id == "pie-chart" and pie_click_data:
+        oops = pie_click_data['points'][0]['label']
+        if oops == "Injured":
+            oops = "injured"
+        if oops == "Uninjured":
+            oops = "uninjured"
+        if oops == "Fatal":
+            oops = "fatal"
+
+        pie_chart = update_pie_chart(shark_species_list, [oops])
+
+        return fig, selected_attribute, None, None, line_chart, pie_chart
+
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
         
@@ -961,7 +972,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Remove all traces except the initial one
         fig= initial_fig_clustered()
         line_chart = initial_line_chart()
-        pie_chart = update_pie_chart(["Default"])
+        pie_chart = update_pie_chart(["Default"], None)
         clicked_categories = []
 
         # Reset map to default view
