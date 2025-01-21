@@ -17,10 +17,14 @@ import distinctipy
 from plotly.subplots import make_subplots
 from sklearn.preprocessing import MinMaxScaler
 
+from plotly.subplots import make_subplots
+from sklearn.preprocessing import MinMaxScaler
+
 
 
 # Load the shark attack data
 # data = pd.read_csv('Australian Shark-Incident Database Public Version.csv')
+data = pd.read_csv('Scripts\Australian Shark-Incident Database Public Version.csv')
 data = pd.read_csv('Scripts\Australian Shark-Incident Database Public Version.csv')
 
 # Global variables
@@ -172,6 +176,11 @@ def annotation_shape():
     )
 
     return fig
+
+# Normalize the cluster sizes
+cluster_sizes_array = np.array(cluster_sizes)
+scaler = MinMaxScaler()
+normalized_cluster_sizes = scaler.fit_transform(cluster_sizes_array.reshape(-1, 1)).flatten()
 
 # Normalize the cluster sizes
 cluster_sizes_array = np.array(cluster_sizes)
@@ -331,7 +340,9 @@ line_fig = parallel_chart()
 def update_pie_chart(shark_species_list, selected):
     global data
 
+
     # Check if there is any data for the selected shark species
+    if  "Default" in shark_species_list:
     if  "Default" in shark_species_list:
         pie_chart = px.pie(template='plotly_dark')
         pie_chart.add_annotation(
@@ -348,6 +359,37 @@ def update_pie_chart(shark_species_list, selected):
     
         return pie_chart
     
+    # Create subplots
+    num_sharks = len(shark_species_list)
+    num_col = 2
+    num_row = num_sharks
+    
+    # Create subplot titles
+    subplot_titles = []
+    for shark in shark_species_list:
+        subplot_titles.append(f"{shark} - Injuries")
+        subplot_titles.append(f"{shark} - Provocation Rate")
+
+    fig = make_subplots(rows=num_row, cols=num_col, specs=[[{'type': 'domain'}, {'type': 'domain'}]] * num_row,
+                    subplot_titles=subplot_titles)
+    
+    for i, shark in enumerate(shark_species_list):
+        # Filter the data for the selected shark species
+        filtered_data = data[data['Shark.common.name'] == shark]
+        
+        row = i + 1
+        col_injury = 1
+        col_provoked = 2
+            
+        if filtered_data.empty:
+            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=f"{shark} - Injuries"), row=row, col=col_injury)
+            fig.add_trace(go.Pie(labels=["No data"], values=[1], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
+            continue    
+
+        # Sample data for the pie chart
+        filtered_map_df = filtered_data["Victim.injury"]
+        filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
+        yearly_counts = filtered_map_df.groupby('Victim.injury').size().reset_index(name='Occurrences')
     # Create subplots
     num_sharks = len(shark_species_list)
     num_col = 2
@@ -450,6 +492,7 @@ app.layout = dmc.MantineProvider(
                             },
                             children=[
                                 # Left COLUMN
+                                html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff", "textAlign": "center"}),  # Light text color
                                 html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff", "textAlign": "center"}),  # Light text color
                                 html.Label("Select Attribute for Bar Chart:", style={'color': '#fff'}),  # Light text color
                                 dcc.Dropdown(
