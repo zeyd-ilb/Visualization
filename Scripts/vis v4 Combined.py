@@ -131,22 +131,33 @@ attribute_preprocessing()
 
 def color_coding(attribute):
     # COLOR BY TYPE
+    global colors
+    colors_temp = colors
+
     if attribute == "Injury.severity":
-        shark_types = data[attribute].unique()
-        colors[:len(shark_types)]
-        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
+        # Count the occurrences of each attribute
+        attribute_counts = data[attribute].value_counts()
+        # Get the unique attributes sorted by frequency
+        sorted_attributes = attribute_counts.index.tolist()
+        # Ensure there are enough colors for the attributes
+        colors_temp = colors_temp[:len(sorted_attributes)]
+        # Create a color map based on the sorted attributes
+        color_map = {sorted_attributes[i]: mcolors.to_hex(colors_temp[i]) for i in range(len(sorted_attributes))}
+        # Map the colors to the data
         data["Injury.color"] = data[attribute].map(color_map)
 
     if attribute == "Shark.common.name":
-        shark_types = data[attribute].unique()
-        colors[:len(shark_types)]
-        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
+        attribute_counts = data[attribute].value_counts()
+        sorted_attributes = attribute_counts.index.tolist()
+        colors_temp = colors_temp[:len(sorted_attributes)]
+        color_map = {sorted_attributes[i]: mcolors.to_hex(colors_temp[i]) for i in range(len(sorted_attributes))}
         data["Shark.color"] = data[attribute].map(color_map)
 
     if attribute == "Victim.activity":
-        shark_types = data[attribute].unique()
-        colors[:len(shark_types)]
-        color_map = {shark_types[i]: mcolors.to_hex(colors[i]) for i in range(len(shark_types))}
+        attribute_counts = data[attribute].value_counts()
+        sorted_attributes = attribute_counts.index.tolist()
+        colors_temp = colors_temp[:len(sorted_attributes)]
+        color_map = {sorted_attributes[i]: mcolors.to_hex(colors_temp[i]) for i in range(len(sorted_attributes))}
         data["Victim.color"] = data[attribute].map(color_map)
     
     return color_map
@@ -391,20 +402,31 @@ def update_pie_chart(shark_species_list, selected):
         
         pie_df_injury = pd.DataFrame(pie_data_injury)
 
-        fig.add_trace(go.Pie(labels=pie_df_injury['Category'], values=pie_df_injury['Values'], name=f"{shark} - Injuries"), row=row, col=col_injury)
+        fig.add_trace(go.Pie(labels=pie_df_injury['Category'], values=pie_df_injury['Values'],
+                            textfont=dict(color='white'), insidetextfont=dict(color='white'),
+                            outsidetextfont=dict(color='white'),hoverinfo='label+value+percent'), row=row, col=col_injury)
 
-        # Sample data for the provoked/unprovoked pie chart
+        # Sample data for the provoked/unprovoked pie chart based on clicked injury type
         fatality_data = filtered_data[filtered_data["Victim.injury"].isin(selected)]
         provoked_counts = fatality_data["Provoked/unprovoked"].value_counts().reset_index()
         provoked_counts.columns = ["Category", "Values"]
         
-        fig.add_trace(go.Pie(labels=provoked_counts['Category'], values=provoked_counts['Values'], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
-    
-    # Adjust the title font size based on the number of shark types
-    title_font_size = 20 if num_sharks <= 2 else 12
+        fig.add_trace(go.Pie(labels=provoked_counts['Category'], values=provoked_counts['Values'],
+                            textfont=dict(color='white'),insidetextfont=dict(color='white'),
+                            outsidetextfont=dict(color='white'),hoverinfo='label+value+percent'), row=row, col=col_provoked)
 
-    fig.update_layout(template='plotly_dark', title_text="Fatality and Provocation Rates for Selected Shark Species",
-                      title_font_size=title_font_size)
+        # Update the provocation rate subplot title based on the selected injury type
+        if len(selected) == 1:
+            fig.layout.annotations[i * 2 + 1].text = f"{shark} - Provocation Rate ({selected[0]})"
+        else:
+            fig.layout.annotations[i * 2 + 1].text = f"{shark} - Provocation Rate"
+
+    fig.update_layout(template='plotly_dark', title_text="Fatality and Provocation Rates for Selected Shark Species")
+    
+    if num_sharks > 2: 
+        # Update subplot title font size
+        for annotation in fig['layout']['annotations']:
+            annotation['font'] = {'size': 12}  # Change the size to you
     
     return fig
 
@@ -542,9 +564,9 @@ app.layout = dmc.MantineProvider(
                                         html.Label("Click on a bar to see the points:", style={'marginBottom': '10px', "color": "#fff"}), 
                                         dcc.Graph(id='bar-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
                                         dcc.Graph(id='line-chart', style={'marginBottom': '10px'},config={'displayModeBar': False}),
-                                        dcc.Graph(id='pie-chart'),
+                                        dcc.Graph(id='pie-chart',config={'displayModeBar': False}),
                                         html.H1("Parallel Coordinate Plot for States"),
-                                        dcc.Graph(id="parallel-coordinate-plot", figure=line_fig),
+                                        dcc.Graph(id="parallel-coordinate-plot", figure=line_fig,config={'displayModeBar': False}),
                                         
                                 ]),
                                 html.Div(id='previous-dropdown-value', style={'display': 'none'}),
@@ -987,8 +1009,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     # Default return
     return fig, selected_attribute, None, None, line_chart, pie_chart
-
-
 
 if __name__ == "__main__":
     app.run_server(debug=True)
