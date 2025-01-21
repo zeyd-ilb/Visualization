@@ -340,9 +340,7 @@ line_fig = parallel_chart()
 def update_pie_chart(shark_species_list, selected):
     global data
 
-
     # Check if there is any data for the selected shark species
-    if  "Default" in shark_species_list:
     if  "Default" in shark_species_list:
         pie_chart = px.pie(template='plotly_dark')
         pie_chart.add_annotation(
@@ -386,10 +384,6 @@ def update_pie_chart(shark_species_list, selected):
             fig.add_trace(go.Pie(labels=["No data"], values=[1], name=f"{shark} - Provoked/Unprovoked"), row=row, col=col_provoked)
             continue    
 
-        # Sample data for the pie chart
-        filtered_map_df = filtered_data["Victim.injury"]
-        filtered_map_df = filtered_map_df.reset_index(drop=True).to_frame(name='Victim.injury')
-        yearly_counts = filtered_map_df.groupby('Victim.injury').size().reset_index(name='Occurrences')
     # Create subplots
     num_sharks = len(shark_species_list)
     num_col = 2
@@ -492,7 +486,6 @@ app.layout = dmc.MantineProvider(
                             },
                             children=[
                                 # Left COLUMN
-                                html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff", "textAlign": "center"}),  # Light text color
                                 html.H1("Shark Incident Details", style={"marginBottom": "10px", "color": "#fff", "textAlign": "center"}),  # Light text color
                                 html.Label("Select Attribute for Bar Chart:", style={'color': '#fff'}),  # Light text color
                                 dcc.Dropdown(
@@ -733,7 +726,7 @@ def update_bar_chart(selected_attribute, filter_option, log_scale, map_click_dat
      Input("reset_button", "n_clicks")],
     [State("previous-dropdown-value", "children")]
 )
-def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, pie_click_data, compare, reset_clicks, previous_attribute):
+def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, pie_click_data, reset_clicks, previous_attribute):
     global clicked_categories
     global fig
     global line_chart
@@ -891,7 +884,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             pie_chart = update_pie_chart(shark_species_list, ["fatal", "injured", "uninjured"])
                 
         elif selected_attribute != 'Shark.common.name':
-            pie_chart = update_pie_chart(["Default"], ["Default"])
+            pie_chart = update_pie_chart(["Default"], None)
         line_chart = go.Figure()
         
         # Plot all clicked categories for line chart
@@ -1001,10 +994,18 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         return new_fig, selected_attribute, None, None, line_chart, pie_chart
 
     elif triggered_id == "pie-chart" and pie_click_data:
-        print(pie_click_data)
-        pie_chart = update_pie_chart(shark_species_list, str(pie_click_data))
+        oops = pie_click_data['points'][0]['label']
+        if oops == "Injured":
+            oops = "injured"
+        if oops == "Uninjured":
+            oops = "uninjured"
+        if oops == "Fatal":
+            oops = "fatal"
 
-        return new_fig, selected_attribute, None, None, line_chart, pie_chart
+        print(oops)
+        pie_chart = update_pie_chart(shark_species_list, [oops])
+
+        return fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Handle reset button click
     elif triggered_id == "reset_button" and reset_clicks:
@@ -1014,7 +1015,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
         # Remove all traces except the initial one
         fig= initial_fig_clustered()
         line_chart = initial_line_chart()
-        pie_chart = update_pie_chart(["Default"], ["Default"])
+        pie_chart = update_pie_chart(["Default"], None)
         clicked_categories = []
 
         # Reset map to default view
