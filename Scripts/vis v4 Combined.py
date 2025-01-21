@@ -525,6 +525,7 @@ app.layout = dmc.MantineProvider(
                                             children=[
                                                 dmc.Col(
                                                     span=3,
+                                                    style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'},
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch_log_scale",
@@ -533,7 +534,8 @@ app.layout = dmc.MantineProvider(
                                                     ],
                                                 ),
                                                 dmc.Col(
-                                                    span=3,
+                                                    span=4,
+                                                    style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'},
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch_comparison",
@@ -543,15 +545,17 @@ app.layout = dmc.MantineProvider(
                                                 ),
                                                 dmc.Col(
                                                     span=3,
+                                                    style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'},
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch-line-chart",
-                                                            label="Monthly/Yearly ",
+                                                            label="Yearly/Monthly",
                                                         ),
                                                     ],
                                                 ),
                                                 dmc.Col(
-                                                    span=3,
+                                                    span=2,
+                                                    style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'},
                                                     children=[
                                                         dmc.Button(
                                                             "Reset Map", 
@@ -887,8 +891,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
             if monthly_yearly_switch == True:
                 month_or_year = 'Incident.month'
+                name = "Months"
             else:
                 month_or_year = 'Incident.year'
+                name = "Years"
             
             filtered_map_df = temp_data[temp_data[selected_attribute] == category]
             yearly_counts = filtered_map_df.groupby(month_or_year).size().reset_index(name='Occurrences')
@@ -916,7 +922,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                  
         # Update the line chart layout
         line_chart.update_layout(
-            title=f"Occurrences of {selected_attribute_renamed} Over Years",
+            title=f"Occurrences of {selected_attribute_renamed} Over {name}",
             xaxis=dict(
                 title="Year",
                 type="linear",  # Keep the x-axis linear for years
@@ -1006,11 +1012,14 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
     elif triggered_id == "switch-line-chart":
         line_chart = go.Figure()
-        
+        selected_attribute_renamed = attribute_rename(selected_attribute)[0]
+
         if monthly_yearly_switch == True:
             month_or_year = 'Incident.month'
+            name = "Months"
         else:
             month_or_year = 'Incident.year'
+            name = "Years"
        
         for category, color in clicked_categories:
             filtered_map_df = temp_data[temp_data[selected_attribute] == category]
@@ -1035,7 +1044,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 
         # Update the line chart layout
         line_chart.update_layout(
-            title=f"Occurrences of Over Years",
+            title=f"Occurrences of {selected_attribute_renamed} Over {name}",
             xaxis=dict(
                 title="Year",
                 type="linear",  # Keep the x-axis linear for years
