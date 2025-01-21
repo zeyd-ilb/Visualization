@@ -29,6 +29,7 @@ focused_map_df = pd.DataFrame()
 once = True
 attribute_changed = False
 was_compare = False
+new_fig = None
 
 colors = distinctipy.get_colors(27)  
 colors = colors[2:] 
@@ -523,7 +524,7 @@ app.layout = dmc.MantineProvider(
                                             style={"marginBottom": 15,"marginLeft": 5, "padding": 0},
                                             children=[
                                                 dmc.Col(
-                                                    span=4,
+                                                    span=3,
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch_log_scale",
@@ -532,7 +533,7 @@ app.layout = dmc.MantineProvider(
                                                     ],
                                                 ),
                                                 dmc.Col(
-                                                    span=4,
+                                                    span=3,
                                                     children=[
                                                         dmc.Switch(
                                                             id="switch_comparison",
@@ -541,7 +542,16 @@ app.layout = dmc.MantineProvider(
                                                     ],
                                                 ),
                                                 dmc.Col(
-                                                    span=4,
+                                                    span=3,
+                                                    children=[
+                                                        dmc.Switch(
+                                                            id="switch-line-chart",
+                                                            label="Monthly/Yearly ",
+                                                        ),
+                                                    ],
+                                                ),
+                                                dmc.Col(
+                                                    span=3,
                                                     children=[
                                                         dmc.Button(
                                                             "Reset Map", 
@@ -703,12 +713,14 @@ def update_bar_chart(selected_attribute, filter_option, log_scale, map_click_dat
      Input("shark-map", "clickData"), 
      Input('switch_comparison', 'checked'),
      Input("pie-chart", "clickData"),
-     Input("reset_button", "n_clicks")],
+     Input("reset_button", "n_clicks"),
+     Input("switch-line-chart", "checked")],
     [State("previous-dropdown-value", "children")]
 )
-def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, pie_click_data, reset_clicks, previous_attribute):
+def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, compare, pie_click_data, reset_clicks, monthly_yearly_switch, previous_attribute ):
     global clicked_categories
     global fig
+    global new_fig
     global line_chart
     global once
     global pie_chart
@@ -769,7 +781,8 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
     if selected_attribute != previous_attribute:
         clicked_categories = []
         attribute_changed = True
-
+        pie_chart = update_pie_chart(["Default"], None)
+        
         # Check current zoom level to determine if bar chart interaction is allowed
         current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
         if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
@@ -795,7 +808,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             focused_map_df = data[data["Cluster"] == cluster_id]
 
         fig.data = []
-        # Add trace for all points (if needed)
+        # Add trace for focused area
         fig.add_trace(go.Scattermapbox(
             lat=focused_map_df["Latitude"],
             lon=focused_map_df["Longitude"],
@@ -863,8 +876,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             shark_species_list = [category for category, color in clicked_categories]
             pie_chart = update_pie_chart(shark_species_list, ["fatal", "injured", "uninjured"])
                 
-        elif selected_attribute != 'Shark.common.name':
-            pie_chart = update_pie_chart(["Default"], None)
         line_chart = go.Figure()
         
         # Plot all clicked categories for line chart
@@ -872,21 +883,29 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
             #If the map is focused use the focused data
             if not focused_map_df.empty:
-                temp_data = focused_map_df    
+                temp_data = focused_map_df   
 
-            #If the map is not focused use the original data
+            if monthly_yearly_switch == True:
+                month_or_year = 'Incident.month'
+            else:
+                month_or_year = 'Incident.year'
+            
             filtered_map_df = temp_data[temp_data[selected_attribute] == category]
-            yearly_counts = filtered_map_df.groupby('Incident.year').size().reset_index(name='Occurrences')
+            yearly_counts = filtered_map_df.groupby(month_or_year).size().reset_index(name='Occurrences')
 
-            # Determine the range of years from the data
-            start_year = int(yearly_counts['Incident.year'].min())
-            end_year = int(yearly_counts['Incident.year'].max())
-            all_years = pd.DataFrame({'Incident.year': range(start_year, end_year + 1)})
+            # # Determine the range of years from the data
+            if not yearly_counts[month_or_year].empty and yearly_counts[month_or_year].notna().all():
+                start_year = int(yearly_counts[month_or_year].min())
+                end_year = int(yearly_counts[month_or_year].max())
+                all_years = pd.DataFrame({month_or_year: range(start_year, end_year + 1)})
+            else:
+                # Handle the case where the data is empty or contains NaN values
+                all_years = pd.DataFrame({month_or_year: []})
 
-            yearly_counts = all_years.merge(yearly_counts, on='Incident.year', how='left').fillna(0)
+            yearly_counts = all_years.merge(yearly_counts, on=month_or_year, how='left').fillna(0)
 
             line_chart.add_trace(go.Scatter(
-                x=yearly_counts['Incident.year'],
+                x=yearly_counts[month_or_year],
                 y=yearly_counts['Occurrences'],
                 mode='lines+markers',
                 name=category,
@@ -894,7 +913,7 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 line=dict(color=color),
                 marker=dict(color=color)
             ))
-        
+                 
         # Update the line chart layout
         line_chart.update_layout(
             title=f"Occurrences of {selected_attribute_renamed} Over Years",
@@ -969,7 +988,6 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
                 ),
             dragmode=False,
         )
-        
 
         return new_fig, selected_attribute, None, None, line_chart, pie_chart
 
@@ -984,6 +1002,61 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
 
         pie_chart = update_pie_chart(shark_species_list, [oops])
 
+        return fig, selected_attribute, None, None, line_chart, pie_chart
+
+    elif triggered_id == "switch-line-chart":
+        line_chart = go.Figure()
+        
+        if monthly_yearly_switch == True:
+            month_or_year = 'Incident.month'
+        else:
+            month_or_year = 'Incident.year'
+       
+        for category, color in clicked_categories:
+            filtered_map_df = temp_data[temp_data[selected_attribute] == category]
+            yearly_counts = filtered_map_df.groupby(month_or_year).size().reset_index(name='Occurrences')
+
+            # Determine the range of years from the data
+            start_year = int(yearly_counts[month_or_year].min())
+            end_year = int(yearly_counts[month_or_year].max())
+            all_years = pd.DataFrame({month_or_year: range(start_year, end_year + 1)})
+
+            yearly_counts = all_years.merge(yearly_counts, on=month_or_year, how='left').fillna(0)
+
+            line_chart.add_trace(go.Scatter(
+                x=yearly_counts[month_or_year],
+                y=yearly_counts['Occurrences'],
+                mode='lines+markers',
+                name=category,
+                hovertemplate='%{x}<br>Occurrences: %{y}<extra></extra>',
+                line=dict(color=color),
+                marker=dict(color=color)
+            ))
+                
+        # Update the line chart layout
+        line_chart.update_layout(
+            title=f"Occurrences of Over Years",
+            xaxis=dict(
+                title="Year",
+                type="linear",  # Keep the x-axis linear for years
+            ),
+            yaxis=dict(
+                title="Number of Occurrences",
+                type="linear",  # Apply log scale if enabled
+            ),
+            template='plotly_dark',  # Set the dark theme
+            legend=dict(
+                x=0.2,  # Horizontal position (0 to 1)
+                y=1,    # Vertical position (0 to 1)
+                xanchor='center',  # Anchor the legend horizontally at the center
+                yanchor='top',     # Anchor the legend vertically at the top
+                bgcolor='rgba(0,0,0,0)',  # Background color of the legend (transparent)
+                bordercolor='rgba(255,255,255,0.5)',  # Border color of the legend
+                borderwidth=1  # Border width of the legend
+            )
+        )
+        if new_fig is not None:
+            return new_fig, selected_attribute, None, None, line_chart, pie_chart
         return fig, selected_attribute, None, None, line_chart, pie_chart
 
     # Handle reset button click
