@@ -1065,6 +1065,10 @@ def handle_map_interactions(bar_click_data, selected_attribute, map_click_data, 
             )
         )
         if new_fig is not None:
+            # Check current zoom level to determine if bar chart interaction is allowed
+            current_zoom = fig.layout.mapbox.zoom if "mapbox" in fig.layout else 3.5
+            if current_zoom < 7:  # If zoom level is less than 8, ignore bar chart interactions
+                return fig, selected_attribute, None, None, line_chart, pie_chart
             return new_fig, selected_attribute, None, None, line_chart, pie_chart
         return fig, selected_attribute, None, None, line_chart, pie_chart
 
