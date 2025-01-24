@@ -1,3 +1,4 @@
+python==3.11.3
 scikit-learn==1.2.0
 dash-mantine-components==0.13.0a2
 dash==2.18.2
