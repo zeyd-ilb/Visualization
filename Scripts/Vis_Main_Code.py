@@ -16,8 +16,6 @@ from sklearn.neighbors import NearestNeighbors
 import distinctipy
 from plotly.subplots import make_subplots
 from sklearn.preprocessing import MinMaxScaler
-from plotly.subplots import make_subplots
-from sklearn.preprocessing import MinMaxScaler
 
 # Load the shark attack data
 data = pd.read_csv('Scripts\Australian Shark-Incident Database Public Version.csv')
