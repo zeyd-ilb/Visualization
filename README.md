@@ -19,3 +19,5 @@ pip install -r requirements.txt
 ```
 
 ![image](https://github.com/user-attachments/assets/3d2e2d63-c140-4491-bbf4-22a4f7a6a808)
+
+![image](https://github.com/user-attachments/assets/2a924c87-d02c-459b-9d33-333b66908889)
